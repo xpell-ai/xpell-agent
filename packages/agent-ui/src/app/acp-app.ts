@@ -4,12 +4,14 @@ import {
   REGION_MAIN,
   REGION_OVERLAY,
   ROUTE_ABOUT,
+  ROUTE_AGENT,
   ROUTE_ADMIN_USERS,
   ROUTE_LOGIN,
   ROUTE_SETTINGS,
   ROUTE_SKILLS,
   ROUTE_SKILL_SETTINGS,
   VIEW_ABOUT,
+  VIEW_AGENT,
   VIEW_ADMIN_USERS,
   VIEW_LOGIN,
   VIEW_SETTINGS,
@@ -17,6 +19,7 @@ import {
   VIEW_SKILL_SETTINGS
 } from "../state/xd_keys.js";
 import about_view_json from "../views/about.view.json";
+import agent_view_json from "../views/agent.view.json";
 import admin_users_view_json from "../views/admin-users.view.json";
 import login_view_json from "../views/login.view.json";
 import settings_view_json from "../views/settings.view.json";
@@ -34,6 +37,7 @@ export async function create_acp_app(): Promise<XVMApp> {
   const views: Record<string, XObjectData> = {
     [VIEW_LOGIN]: clone_view(login_view_json) as XObjectData,
     [VIEW_ABOUT]: clone_view(about_view_json) as XObjectData,
+    [VIEW_AGENT]: clone_view(agent_view_json) as XObjectData,
     [VIEW_ADMIN_USERS]: clone_view(admin_users_view_json) as XObjectData,
     [VIEW_SKILLS]: clone_view(skills_view_json) as XObjectData,
     [VIEW_SKILL_SETTINGS]: clone_view(skill_settings_view_json) as XObjectData,
@@ -74,6 +78,11 @@ export async function create_acp_app(): Promise<XVMApp> {
       {
         _id: ROUTE_ABOUT,
         _view_id: VIEW_ABOUT,
+        _region: REGION_MAIN
+      },
+      {
+        _id: ROUTE_AGENT,
+        _view_id: VIEW_AGENT,
         _region: REGION_MAIN
       },
       {

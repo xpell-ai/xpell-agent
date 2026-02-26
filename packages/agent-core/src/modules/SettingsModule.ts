@@ -335,6 +335,20 @@ export class SettingsModule extends XModule {
     if (!Object.prototype.hasOwnProperty.call(agent_settings, "business_name")) {
       agent_settings.business_name = "Ruta1";
     }
+    const identity_settings = is_plain_object(agent_settings.identity) ? clone_json(agent_settings.identity) : {};
+    if (!Object.prototype.hasOwnProperty.call(identity_settings, "name")) {
+      identity_settings.name = "XBot";
+    }
+    if (!Object.prototype.hasOwnProperty.call(identity_settings, "role")) {
+      identity_settings.role = "";
+    }
+    if (!Object.prototype.hasOwnProperty.call(identity_settings, "system_prompt")) {
+      identity_settings.system_prompt = "";
+    }
+    if (!Object.prototype.hasOwnProperty.call(identity_settings, "language_policy")) {
+      identity_settings.language_policy = "auto";
+    }
+    agent_settings.identity = identity_settings;
     root.agent = agent_settings;
 
     const kb_settings = is_plain_object(root.kb) ? clone_json(root.kb) : {};

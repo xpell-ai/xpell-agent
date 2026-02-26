@@ -201,6 +201,13 @@ body {
   padding: 0 var(--x-space-2);
 }
 
+.acp-textarea {
+  min-height: 180px;
+  padding: var(--x-space-2);
+  resize: vertical;
+  line-height: 1.4;
+}
+
 .acp-inline-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

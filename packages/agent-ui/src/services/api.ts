@@ -66,6 +66,26 @@ export type ACPAbout = {
   server_url?: string;
 };
 
+export type ACPAgentLanguagePolicy = "auto" | "spanish" | "english";
+
+export type ACPAgentIdentity = {
+  name: string;
+  role: string;
+  system_prompt: string;
+  language_policy: ACPAgentLanguagePolicy;
+};
+
+export type ACPAgentProfile = {
+  agent_id: string;
+  env: string;
+  agent_runtime_version: string;
+  xpell_version: string;
+  connected: boolean;
+  identity: ACPAgentIdentity;
+};
+
+export type ACPAgentProfilePatch = Partial<ACPAgentIdentity>;
+
 export type ACPTelegramSkillSettings = {
   bot_token: string;
   admin_chat_ids: string[];
@@ -133,6 +153,10 @@ export interface AgentApi {
     getServerUrl(): string;
     setServerUrl(next_url: string): string;
   };
+  agent: {
+    getProfile(): Promise<ACPAgentProfile>;
+    setProfile(patch: ACPAgentProfilePatch): Promise<ACPAgentProfile>;
+  };
 }
 
 type ACPAdminRecord = ACPAdminUser & { password: string };
@@ -181,6 +205,13 @@ function is_plain_object(value: unknown): value is Record<string, unknown> {
 
 function as_text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalize_language_policy(value: unknown): ACPAgentLanguagePolicy {
+  const normalized = as_text(value).toLowerCase();
+  if (normalized === "spanish") return "spanish";
+  if (normalized === "english") return "english";
+  return "auto";
 }
 
 function deep_clone<T>(value: T): T {
@@ -422,6 +453,24 @@ export class AgentApiError extends Error {
   }
 }
 
+function to_agent_profile(payload: unknown): ACPAgentProfile {
+  const value = is_plain_object(payload) ? payload : {};
+  const identity_obj = is_plain_object(value.identity) ? value.identity : {};
+  return {
+    agent_id: as_text(value.agent_id) || "unknown",
+    env: as_text(value.env) || "default",
+    agent_runtime_version: as_text(value.agent_runtime_version) || as_text(value.version) || "unknown",
+    xpell_version: as_text(value.xpell_version) || "unknown",
+    connected: value.connected !== false,
+    identity: {
+      name: as_text(identity_obj.name),
+      role: as_text(identity_obj.role),
+      system_prompt: typeof identity_obj.system_prompt === "string" ? identity_obj.system_prompt : "",
+      language_policy: normalize_language_policy(identity_obj.language_policy)
+    }
+  };
+}
+
 function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
   const dev_mode = opts.dev_mode === true;
   let server_url = resolve_server_url(opts);
@@ -467,6 +516,19 @@ function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
     xpell_version: "2.0.0-alpha.5",
     connected: false,
     server_url
+  };
+  let agent_profile: ACPAgentProfile = {
+    agent_id: "xbot-mock",
+    env: "default",
+    agent_runtime_version: about.agent_version,
+    xpell_version: about.xpell_version,
+    connected: false,
+    identity: {
+      name: "XBot",
+      role: "",
+      system_prompt: "",
+      language_policy: "auto"
+    }
   };
 
   let admin_counter = admins.length + 1;
@@ -738,6 +800,35 @@ function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
         server_url = normalize_server_url(next_url);
         persist_server_url(server_url);
         return server_url;
+      }
+    },
+
+    agent: {
+      async getProfile(): Promise<ACPAgentProfile> {
+        return deep_clone(agent_profile);
+      },
+
+      async setProfile(patch: ACPAgentProfilePatch): Promise<ACPAgentProfile> {
+        const patch_obj = is_plain_object(patch) ? patch : {};
+        const next_identity: ACPAgentIdentity = {
+          name: Object.prototype.hasOwnProperty.call(patch_obj, "name")
+            ? as_text(patch_obj.name)
+            : agent_profile.identity.name,
+          role: Object.prototype.hasOwnProperty.call(patch_obj, "role")
+            ? as_text(patch_obj.role)
+            : agent_profile.identity.role,
+          system_prompt: Object.prototype.hasOwnProperty.call(patch_obj, "system_prompt")
+            ? (typeof patch_obj.system_prompt === "string" ? patch_obj.system_prompt.trim() : "")
+            : agent_profile.identity.system_prompt,
+          language_policy: Object.prototype.hasOwnProperty.call(patch_obj, "language_policy")
+            ? normalize_language_policy(patch_obj.language_policy)
+            : agent_profile.identity.language_policy
+        };
+        agent_profile = {
+          ...agent_profile,
+          identity: next_identity
+        };
+        return deep_clone(agent_profile);
       }
     }
   };
@@ -1289,6 +1380,39 @@ function create_wormholes_api(opts: CreateAgentApiOptions): AgentApi {
         server_url = normalize_server_url(next_url);
         persist_server_url(server_url);
         return server_url;
+      }
+    },
+
+    agent: {
+      async getProfile(): Promise<ACPAgentProfile> {
+        const out = await call_xcmd<unknown>("agent", "get_profile", {}, resolve_sid());
+        return to_agent_profile(out);
+      },
+
+      async setProfile(patch: ACPAgentProfilePatch): Promise<ACPAgentProfile> {
+        const patch_obj = is_plain_object(patch) ? patch : {};
+        const out = await call_xcmd<unknown>(
+          "agent",
+          "set_profile",
+          {
+            profile: {
+              ...(Object.prototype.hasOwnProperty.call(patch_obj, "name")
+                ? { name: as_text(patch_obj.name) }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(patch_obj, "role")
+                ? { role: as_text(patch_obj.role) }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(patch_obj, "system_prompt")
+                ? { system_prompt: typeof patch_obj.system_prompt === "string" ? patch_obj.system_prompt.trim() : "" }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(patch_obj, "language_policy")
+                ? { language_policy: normalize_language_policy(patch_obj.language_policy) }
+                : {})
+            }
+          },
+          resolve_sid()
+        );
+        return to_agent_profile(out);
       }
     }
   };

@@ -1,22 +1,11 @@
 import { _x, _xlog, XUI, XVM } from "@xpell/ui";
-import { XDashPack } from "../../../../xpell-web/xdashboard/dist/index.js";
-import "../../../../xpell-web/xdashboard/dist/xdashboard.css";
+import { XDashPack } from "@xpell/xdashboard";
+import "@xpell/xdashboard/dist/xdashboard.css";
 
 import "../assets/styles.css";
 import { create_acp_app } from "./app/acp-app.js";
 import { create_ui_commands } from "./commands/ui-commands.js";
 import { create_agent_api } from "./services/api.js";
-
-function should_use_mock_mode(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    const url = new URL(window.location.href);
-    const raw = (url.searchParams.get("mock") ?? "").trim().toLowerCase();
-    return raw === "1" || raw === "true" || raw === "yes";
-  } catch {
-    return false;
-  }
-}
 
 async function main(): Promise<void> {
   _x.start();
@@ -26,7 +15,7 @@ async function main(): Promise<void> {
 
   XUI.createPlayer("xplayer", "acp-player", "xplayer-root", true);
 
-  const api = create_agent_api({ mode: should_use_mock_mode() ? "mock" : "wormholes" });
+  const api = create_agent_api({ mode: "wormholes" });
   const app = await create_acp_app();
 
   await XVM.app(app);

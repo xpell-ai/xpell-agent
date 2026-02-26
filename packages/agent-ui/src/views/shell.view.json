@@ -89,6 +89,27 @@
         },
         {
           "_type": "button",
+          "_id": "acp-menu-agent-btn",
+          "class": "acp-drawer-link",
+          "_text": "Agent",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/agent"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
           "_id": "acp-menu-admin-users-btn",
           "class": "acp-drawer-link",
           "_text": "Admin Users",

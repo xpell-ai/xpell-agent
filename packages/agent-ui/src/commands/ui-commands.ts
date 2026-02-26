@@ -8,6 +8,7 @@ import {
 } from "../services/auth.js";
 import {
   AgentApiError,
+  type ACPAgentProfile,
   type ACPAbout,
   type ACPAdminUser,
   type ACPAuthUser,
@@ -18,6 +19,7 @@ import {
 import {
   normalize_skill_mode,
   parse_admin_chat_ids,
+  validate_agent_language_policy,
   validate_admin_create_input,
   validate_admin_delete_input,
   validate_admin_update_input,
@@ -29,6 +31,8 @@ import {
   ACTION_ADMIN_CREATE,
   ACTION_ADMIN_DELETE,
   ACTION_ADMIN_UPDATE,
+  ACTION_AGENT_RESET_DEFAULTS,
+  ACTION_AGENT_SAVE,
   ACTION_DRAWER_CLOSE,
   ACTION_DRAWER_TOGGLE,
   ACTION_LOGIN,
@@ -57,6 +61,7 @@ import {
   ID_TOAST,
   ID_TOPBAR,
   KEY_ABOUT,
+  KEY_AGENT_PROFILE,
   KEY_ADMIN_USERS,
   KEY_AUTH_IS_AUTHENTICATED,
   KEY_AUTH_USER,
@@ -66,6 +71,12 @@ import {
   KEY_UI_ABOUT_CONNECTION_TEXT,
   KEY_UI_ABOUT_SERVER_URL_TEXT,
   KEY_UI_ABOUT_XPELL_VERSION_TEXT,
+  KEY_UI_AGENT_CONNECTED_TEXT,
+  KEY_UI_AGENT_ENV_TEXT,
+  KEY_UI_AGENT_FORM_SUMMARY_TEXT,
+  KEY_UI_AGENT_ID_TEXT,
+  KEY_UI_AGENT_RUNTIME_VERSION_TEXT,
+  KEY_UI_AGENT_XPELL_VERSION_TEXT,
   KEY_UI_ADMIN_USERS_LIST_TEXT,
   KEY_UI_DRAWER_OPEN,
   KEY_UI_LOGIN_MESSAGE,
@@ -85,6 +96,7 @@ import {
   KEY_UI_THEME,
   REGION_MAIN,
   ROUTE_ABOUT,
+  ROUTE_AGENT,
   ROUTE_LOGIN,
   ROUTE_SETTINGS,
   ROUTE_SKILLS,
@@ -114,6 +126,9 @@ type UICommandsRuntime = {
 const THEME_STORAGE_KEY = "acp.theme";
 const MASK_SENTINEL = "••••••••";
 const AZURE_SKILL_ID = "@xpell/agent-skill-azure";
+const DEFAULT_AGENT_LANGUAGE_POLICY = "auto";
+const DEFAULT_AGENT_NAME = "XBot";
+type AgentLanguagePolicy = "auto" | "spanish" | "english";
 type ToastVariant = "default" | "success" | "error" | "warn" | "info";
 
 function as_text(value: unknown): string {
@@ -237,6 +252,53 @@ function render_about(about: ACPAbout, source: string): void {
 
   const server_url = typeof about.server_url === "string" && about.server_url.trim() ? about.server_url : "n/a";
   set_xdata(KEY_UI_ABOUT_SERVER_URL_TEXT, `Server URL: ${server_url}`, source);
+}
+
+function normalize_agent_language_policy(value: unknown): AgentLanguagePolicy {
+  const normalized = as_text(value).toLowerCase();
+  if (normalized === "spanish") return "spanish";
+  if (normalized === "english") return "english";
+  return "auto";
+}
+
+function render_agent_profile(profile: ACPAgentProfile, source: string): void {
+  const identity = profile.identity ?? {
+    name: DEFAULT_AGENT_NAME,
+    role: "",
+    system_prompt: "",
+    language_policy: DEFAULT_AGENT_LANGUAGE_POLICY
+  };
+  const language_policy = normalize_agent_language_policy(identity.language_policy);
+  const normalized_profile: ACPAgentProfile = {
+    ...profile,
+    identity: {
+      name: identity.name ?? DEFAULT_AGENT_NAME,
+      role: identity.role ?? "",
+      system_prompt: identity.system_prompt ?? "",
+      language_policy
+    }
+  };
+
+  set_xdata(KEY_AGENT_PROFILE, deep_clone(normalized_profile), source);
+  set_xdata(KEY_UI_AGENT_ID_TEXT, `Agent ID: ${profile.agent_id || "unknown"}`, source);
+  set_xdata(KEY_UI_AGENT_ENV_TEXT, `Env: ${profile.env || "default"}`, source);
+  set_xdata(KEY_UI_AGENT_RUNTIME_VERSION_TEXT, `Agent runtime version: ${profile.agent_runtime_version || "unknown"}`, source);
+  set_xdata(KEY_UI_AGENT_XPELL_VERSION_TEXT, `Xpell version: ${profile.xpell_version || "unknown"}`, source);
+  set_xdata(KEY_UI_AGENT_CONNECTED_TEXT, `Connected status: ${profile.connected ? "connected" : "disconnected"}`, source);
+
+  write_input_value("agent-name-input", normalized_profile.identity.name);
+  write_input_value("agent-role-input", normalized_profile.identity.role);
+  write_input_value("agent-system-prompt-input", normalized_profile.identity.system_prompt);
+  write_input_value("agent-language-policy-select", normalized_profile.identity.language_policy);
+
+  const summary = [
+    `name: ${normalized_profile.identity.name || "(empty)"}`,
+    `role: ${normalized_profile.identity.role || "(empty)"}`,
+    `language_policy: ${normalized_profile.identity.language_policy}`,
+    `system_prompt_chars: ${normalized_profile.identity.system_prompt.length}`
+  ].join("\n");
+
+  set_xdata(KEY_UI_AGENT_FORM_SUMMARY_TEXT, summary, source);
 }
 
 function render_admin_users(users: ACPAdminUser[], source: string): void {
@@ -386,6 +448,11 @@ export function create_ui_commands(opts: UICommandsOptions): UICommandsRuntime {
     render_settings_server_url(api.system.getServerUrl(), SOURCE_API);
   };
 
+  const refresh_agent_profile = async (source: string = SOURCE_API): Promise<void> => {
+    const profile = await api.agent.getProfile();
+    render_agent_profile(profile, source);
+  };
+
   const refresh_admin_users = async (): Promise<void> => {
     const users = await api.users.listAdmins();
     render_admin_users(users, SOURCE_API);
@@ -442,6 +509,10 @@ export function create_ui_commands(opts: UICommandsOptions): UICommandsRuntime {
 
     if (target === ROUTE_SETTINGS) {
       write_input_value("settings-server-url-input", api.system.getServerUrl());
+    }
+
+    if (target === ROUTE_AGENT) {
+      await refresh_agent_profile(SOURCE_API);
     }
   };
 
@@ -797,6 +868,36 @@ export function create_ui_commands(opts: UICommandsOptions): UICommandsRuntime {
     set_status_message(`Azure verify: ${openai_text}; ${speech_text}`, SOURCE_SETTINGS, variant);
   };
 
+  const agent_save = async (): Promise<void> => {
+    const name = read_input_value("agent-name-input");
+    const role = read_input_value("agent-role-input");
+    const system_prompt = read_input_value("agent-system-prompt-input", false).trim();
+    const language_policy = normalize_agent_language_policy(read_input_value("agent-language-policy-select", false));
+
+    const validation = validate_agent_language_policy(language_policy);
+    if (!validation.ok) {
+      set_status_message(validation.error, SOURCE_SETTINGS, "error");
+      return;
+    }
+
+    const profile = await api.agent.setProfile({
+      name,
+      role,
+      system_prompt,
+      language_policy
+    });
+    render_agent_profile(profile, SOURCE_SETTINGS);
+    set_status_message("Agent profile saved.", SOURCE_SETTINGS, "success");
+  };
+
+  const agent_reset_defaults = async (): Promise<void> => {
+    write_input_value("agent-name-input", DEFAULT_AGENT_NAME);
+    write_input_value("agent-role-input", "");
+    write_input_value("agent-system-prompt-input", "");
+    write_input_value("agent-language-policy-select", DEFAULT_AGENT_LANGUAGE_POLICY);
+    await agent_save();
+  };
+
   const settings_theme_toggle = (): void => {
     const current = as_text(_xd.get(KEY_UI_THEME)) === "light" ? "light" : "dark";
     const next = current === "dark" ? "light" : "dark";
@@ -842,6 +943,14 @@ export function create_ui_commands(opts: UICommandsOptions): UICommandsRuntime {
       case ACTION_REFRESH_ABOUT:
         await refresh_about();
         set_status_message("About refreshed.", SOURCE_API);
+        return;
+
+      case ACTION_AGENT_SAVE:
+        await agent_save();
+        return;
+
+      case ACTION_AGENT_RESET_DEFAULTS:
+        await agent_reset_defaults();
         return;
 
       case ACTION_ADMIN_CREATE:
@@ -1007,6 +1116,23 @@ export function create_ui_commands(opts: UICommandsOptions): UICommandsRuntime {
       SOURCE_BOOT
     );
 
+    render_agent_profile(
+      {
+        agent_id: "unknown",
+        env: "default",
+        agent_runtime_version: "unknown",
+        xpell_version: "unknown",
+        connected: false,
+        identity: {
+          name: DEFAULT_AGENT_NAME,
+          role: "",
+          system_prompt: "",
+          language_policy: DEFAULT_AGENT_LANGUAGE_POLICY
+        }
+      },
+      SOURCE_BOOT
+    );
+
     render_admin_users([], SOURCE_BOOT);
     render_skills([], SOURCE_BOOT);
 
@@ -1059,6 +1185,7 @@ export function create_ui_commands(opts: UICommandsOptions): UICommandsRuntime {
       try {
         await refresh_admin_users();
         await refresh_skills();
+        await refresh_agent_profile(SOURCE_API);
         await navigate_to(ROUTE_ABOUT);
       } catch (error) {
         if (error instanceof AgentApiError && error.auth_required) {

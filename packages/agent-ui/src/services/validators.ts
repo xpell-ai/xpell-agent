@@ -66,3 +66,11 @@ export function validate_telegram_settings(mode: ACPSkillMode): ValidationResult
   }
   return ok();
 }
+
+export function validate_agent_language_policy(value: string): ValidationResult {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "auto" || normalized === "spanish" || normalized === "english") {
+    return ok();
+  }
+  return fail("Language policy must be Auto, Spanish, or English.");
+}

@@ -6,6 +6,7 @@ export const REGION_OVERLAY = "overlay";
 
 export const ROUTE_LOGIN = "/login";
 export const ROUTE_ABOUT = "/about";
+export const ROUTE_AGENT = "/agent";
 export const ROUTE_ADMIN_USERS = "/admin-users";
 export const ROUTE_SKILLS = "/skills";
 export const ROUTE_SKILL_SETTINGS = "/skill-settings/:skillId";
@@ -13,6 +14,7 @@ export const ROUTE_SETTINGS = "/settings";
 
 export const VIEW_LOGIN = "view-login";
 export const VIEW_ABOUT = "view-about";
+export const VIEW_AGENT = "view-agent";
 export const VIEW_ADMIN_USERS = "view-admin-users";
 export const VIEW_SKILLS = "view-skills";
 export const VIEW_SKILL_SETTINGS = "view-skill-settings";
@@ -37,6 +39,7 @@ export const KEY_UI_ROUTE = "acp.ui.route";
 export const KEY_UI_THEME = "acp.ui.theme";
 
 export const KEY_ABOUT = "acp.about";
+export const KEY_AGENT_PROFILE = "acp.agent.profile";
 export const KEY_ADMIN_USERS = "acp.admin_users";
 export const KEY_SKILLS = "acp.skills";
 export const KEY_SKILL_SETTINGS = "acp.skill_settings";
@@ -48,6 +51,13 @@ export const KEY_UI_ABOUT_AGENT_VERSION_TEXT = "acp.ui.about.agent_version_text"
 export const KEY_UI_ABOUT_XPELL_VERSION_TEXT = "acp.ui.about.xpell_version_text";
 export const KEY_UI_ABOUT_CONNECTION_TEXT = "acp.ui.about.connection_text";
 export const KEY_UI_ABOUT_SERVER_URL_TEXT = "acp.ui.about.server_url_text";
+
+export const KEY_UI_AGENT_ID_TEXT = "acp.ui.agent.agent_id_text";
+export const KEY_UI_AGENT_ENV_TEXT = "acp.ui.agent.env_text";
+export const KEY_UI_AGENT_RUNTIME_VERSION_TEXT = "acp.ui.agent.runtime_version_text";
+export const KEY_UI_AGENT_XPELL_VERSION_TEXT = "acp.ui.agent.xpell_version_text";
+export const KEY_UI_AGENT_CONNECTED_TEXT = "acp.ui.agent.connected_text";
+export const KEY_UI_AGENT_FORM_SUMMARY_TEXT = "acp.ui.agent.form_summary_text";
 
 export const KEY_UI_ADMIN_USERS_LIST_TEXT = "acp.ui.admin_users.list_text";
 export const KEY_UI_SKILLS_LIST_TEXT = "acp.ui.skills.list_text";
@@ -71,6 +81,8 @@ export const ACTION_DRAWER_TOGGLE = "drawer_toggle";
 export const ACTION_DRAWER_CLOSE = "drawer_close";
 
 export const ACTION_REFRESH_ABOUT = "refresh_about";
+export const ACTION_AGENT_SAVE = "agent_save";
+export const ACTION_AGENT_RESET_DEFAULTS = "agent_reset_defaults";
 
 export const ACTION_ADMIN_CREATE = "admin_create";
 export const ACTION_ADMIN_UPDATE = "admin_update";
@@ -106,12 +118,15 @@ export const UI_COMMAND_OBJECT_IDS: string[] = [
   "acp-logout-btn",
   "acp-drawer-backdrop",
   "acp-menu-about-btn",
+  "acp-menu-agent-btn",
   "acp-menu-admin-users-btn",
   "acp-menu-skills-btn",
   "acp-menu-settings-btn",
   "acp-menu-logout-btn",
   "login-submit-btn",
   "about-refresh-btn",
+  "agent-save-btn",
+  "agent-reset-btn",
   "admin-create-btn",
   "admin-update-btn",
   "admin-delete-btn",

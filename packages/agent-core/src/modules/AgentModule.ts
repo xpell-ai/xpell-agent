@@ -5,13 +5,20 @@ import { CONVERSATIONS_MODULE_NAME } from "./ConversationsModule.js";
 import { KNOWLEDGE_MODULE_NAME } from "./KnowledgeModule.js";
 import { SETTINGS_MODULE_NAME } from "./SettingsModule.js";
 import { USERS_MODULE_NAME } from "./UsersModule.js";
-import { readCommandCtx, requireKernelCap, type AgentActorRole, type AgentCommandCtx } from "../runtime/guards.js";
+import {
+  readCommandCtx,
+  requireKernelCap,
+  requireKernelCapOrActorRole,
+  type AgentActorRole,
+  type AgentCommandCtx
+} from "../runtime/guards.js";
 import { add_task_xdb, init_agent_tasks_xdb, list_tasks_xdb, type AgentTaskXdbScope } from "./agent-xdb.js";
 import type { ConversationMessage, ConversationThread } from "../types/conversations.js";
 
 const MODULE_NAME = "agent";
 const AZURE_MODULE_NAME = "azure";
 const INBOUND_HISTORY_LIMIT = 20;
+const AGENT_SYSTEM_PROMPT_MAX_BYTES = 16 * 1024;
 const KB_EXPORT_DEFAULT_MAX_CHARS = 8000;
 const KB_EXPORT_MAX_CHARS = 24000;
 const KB_BLOCKED_CUSTOMER_TEXT =
@@ -64,6 +71,15 @@ type AgentHandleInboundInput = {
   thread_id: string;
   text: string;
   user_ref?: Record<string, unknown>;
+};
+
+type AgentLanguagePolicy = "auto" | "spanish" | "english";
+
+type AgentProfileIdentity = {
+  name: string;
+  role: string;
+  system_prompt: string;
+  language_policy: AgentLanguagePolicy;
 };
 
 type OpenAIChatMessage = {
@@ -183,6 +199,20 @@ export class AgentModule extends XModule {
     return this.handle_inbound_impl(xcmd);
   }
 
+  async _get_profile(xcmd: XCommandData) {
+    return this.get_profile_impl(xcmd);
+  }
+  async _op_get_profile(xcmd: XCommandData) {
+    return this.get_profile_impl(xcmd);
+  }
+
+  async _set_profile(xcmd: XCommandData) {
+    return this.set_profile_impl(xcmd);
+  }
+  async _op_set_profile(xcmd: XCommandData) {
+    return this.set_profile_impl(xcmd);
+  }
+
   async _init_on_boot(xcmd: XCommandData) {
     return this.init_on_boot_impl(xcmd);
   }
@@ -200,6 +230,37 @@ export class AgentModule extends XModule {
       version: this._version,
       uptime: Date.now() - this._started_at_ms
     };
+  }
+
+  private async get_profile_impl(xcmd: XCommandData) {
+    const ctx = readCommandCtx(xcmd);
+    requireKernelCapOrActorRole(ctx, "admin");
+
+    const identity = await this.exec_read_agent_identity_settings(ctx);
+    return {
+      agent_id: this._agent_id,
+      env: this._xdb_scope._env,
+      agent_runtime_version: this._version,
+      xpell_version: this._version,
+      connected: true,
+      identity
+    };
+  }
+
+  private async set_profile_impl(xcmd: XCommandData) {
+    const ctx = readCommandCtx(xcmd);
+    requireKernelCapOrActorRole(ctx, "admin");
+
+    const params = this.ensure_params(xcmd?._params);
+    const patch = this.parse_agent_profile_patch(params);
+    const current = await this.exec_read_agent_identity_settings(ctx);
+    const next: AgentProfileIdentity = {
+      ...current,
+      ...patch
+    };
+
+    await this.exec_write_agent_identity_settings(ctx, next);
+    return this.get_profile_impl(xcmd);
   }
 
   private async init_on_boot_impl(xcmd: XCommandData) {
@@ -570,6 +631,103 @@ export class AgentModule extends XModule {
     });
     const value = is_plain_object(out) ? ensure_optional_string(out.value) : undefined;
     return value ?? fallback;
+  }
+
+  private parse_agent_profile_patch(params: Dict): Partial<AgentProfileIdentity> {
+    const root = is_plain_object(params.profile) ? this.ensure_params(params.profile) : params;
+    const patch: Partial<AgentProfileIdentity> = {};
+
+    if (Object.prototype.hasOwnProperty.call(root, "name")) {
+      patch.name = this.ensure_trimmed_string_or_empty(root.name, "name");
+    }
+    if (Object.prototype.hasOwnProperty.call(root, "role")) {
+      patch.role = this.ensure_trimmed_string_or_empty(root.role, "role");
+    }
+    if (Object.prototype.hasOwnProperty.call(root, "system_prompt")) {
+      const system_prompt = this.ensure_trimmed_string_or_empty(root.system_prompt, "system_prompt");
+      if (Buffer.byteLength(system_prompt, "utf8") > AGENT_SYSTEM_PROMPT_MAX_BYTES) {
+        throw new XError(
+          "E_AGENT_BAD_PARAMS",
+          `system_prompt exceeds ${AGENT_SYSTEM_PROMPT_MAX_BYTES} bytes`
+        );
+      }
+      patch.system_prompt = system_prompt;
+    }
+    if (Object.prototype.hasOwnProperty.call(root, "language_policy")) {
+      patch.language_policy = this.ensure_language_policy(root.language_policy);
+    }
+
+    return patch;
+  }
+
+  private ensure_trimmed_string_or_empty(value: unknown, field_name: string): string {
+    if (typeof value !== "string") {
+      throw new XError("E_AGENT_BAD_PARAMS", `${field_name} must be a string`);
+    }
+    return value.trim();
+  }
+
+  private ensure_language_policy(value: unknown): AgentLanguagePolicy {
+    if (typeof value !== "string") {
+      throw new XError("E_AGENT_BAD_PARAMS", "language_policy must be a string");
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "auto" || normalized === "spanish" || normalized === "english") {
+      return normalized;
+    }
+    throw new XError("E_AGENT_BAD_PARAMS", "language_policy must be one of: auto, spanish, english");
+  }
+
+  private async exec_read_agent_identity_settings(ctx: AgentCommandCtx): Promise<AgentProfileIdentity> {
+    const out = await _x.execute({
+      _module: SETTINGS_MODULE_NAME,
+      _op: "get",
+      _params: {
+        key: "agent",
+        _ctx: this.forward_ctx(ctx)
+      }
+    });
+    const agent_value = is_plain_object(out) && is_plain_object(out.value) ? out.value : {};
+    const identity_value = is_plain_object(agent_value.identity) ? agent_value.identity : {};
+
+    const name = ensure_optional_string(identity_value.name) ?? ensure_optional_string(agent_value.name) ?? "XBot";
+    const role = ensure_optional_string(identity_value.role) ?? "";
+    const system_prompt = ensure_optional_string(identity_value.system_prompt) ?? "";
+    const language_policy_raw = ensure_optional_string(identity_value.language_policy) ?? "auto";
+    const language_policy = this.ensure_language_policy(language_policy_raw);
+
+    return {
+      name,
+      role,
+      system_prompt,
+      language_policy
+    };
+  }
+
+  private async exec_write_agent_identity_settings(ctx: AgentCommandCtx, identity: AgentProfileIdentity): Promise<void> {
+    await _x.execute({
+      _module: SETTINGS_MODULE_NAME,
+      _op: "set",
+      _params: {
+        key: "agent.identity",
+        value: {
+          name: identity.name,
+          role: identity.role,
+          system_prompt: identity.system_prompt,
+          language_policy: identity.language_policy
+        },
+        _ctx: this.forward_ctx(ctx)
+      }
+    });
+    await _x.execute({
+      _module: SETTINGS_MODULE_NAME,
+      _op: "set",
+      _params: {
+        key: "agent.name",
+        value: identity.name,
+        _ctx: this.forward_ctx(ctx)
+      }
+    });
   }
 
   private forward_ctx(ctx: AgentCommandCtx): Dict {

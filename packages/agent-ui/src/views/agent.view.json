@@ -1,0 +1,155 @@
+{
+  "_id": "view-agent",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Agent"
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.agent.agent_id_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.agent.env_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.agent.runtime_version_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.agent.xpell_version_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.agent.connected_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Agent Name"
+    },
+    {
+      "_type": "input",
+      "_id": "agent-name-input",
+      "class": "acp-input",
+      "placeholder": "XBot"
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Role / Persona"
+    },
+    {
+      "_type": "input",
+      "_id": "agent-role-input",
+      "class": "acp-input",
+      "placeholder": "Booking and support assistant"
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "System Prompt / Script"
+    },
+    {
+      "_type": "xhtml",
+      "_id": "agent-system-prompt-input",
+      "_html_tag": "textarea",
+      "class": "acp-input acp-textarea",
+      "placeholder": "System prompt base script..."
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Language Policy"
+    },
+    {
+      "_type": "xhtml",
+      "_id": "agent-language-policy-select",
+      "_html_tag": "select",
+      "class": "acp-input",
+      "_children": [
+        {
+          "_type": "xhtml",
+          "_html_tag": "option",
+          "value": "auto",
+          "_text": "Auto"
+        },
+        {
+          "_type": "xhtml",
+          "_html_tag": "option",
+          "value": "spanish",
+          "_text": "Spanish"
+        },
+        {
+          "_type": "xhtml",
+          "_html_tag": "option",
+          "value": "english",
+          "_text": "English"
+        }
+      ]
+    },
+    {
+      "_type": "label",
+      "class": "acp-panel",
+      "_data_source": "acp.ui.agent.form_summary_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "agent-save-btn",
+          "class": "acp-primary-btn",
+          "_text": "Save",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "agent_save"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "agent-reset-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Reset to defaults",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "agent_reset_defaults"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

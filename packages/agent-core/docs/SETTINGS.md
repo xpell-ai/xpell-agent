@@ -13,6 +13,16 @@ Authoritative root shape:
   "ui": {
     "theme": "dark"
   },
+  "agent": {
+    "name": "XBot",
+    "business_name": "Ruta1",
+    "identity": {
+      "name": "XBot",
+      "role": "",
+      "system_prompt": "",
+      "language_policy": "auto"
+    }
+  },
   "skills": {
     "@xpell/agent-skill-telegram": {
       "bot_token": "123456:ABC",
@@ -25,7 +35,15 @@ Authoritative root shape:
 
 Stable root keys used now:
 - `ui`
+- `agent`
 - `skills`
+- `kb`
+
+Agent profile keys used by ACP:
+- `agent.identity.name`
+- `agent.identity.role`
+- `agent.identity.system_prompt`
+- `agent.identity.language_policy`
 
 Per-skill settings are stored at:
 - `skills.<skill_id>`

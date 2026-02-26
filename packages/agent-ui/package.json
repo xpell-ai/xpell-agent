@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@xpell/core": "2.0.0-alpha.10",
-    "@xpell/ui": "2.0.0-alpha.5"
+    "@xpell/ui": "2.0.0-alpha.5",
+    "@xpell/xdashboard": "0.1.0-alpha.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
