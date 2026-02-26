@@ -1,6 +1,6 @@
 import { _x, _xlog, XUI, XVM } from "@xpell/ui";
 import { XDashPack } from "@xpell/xdashboard";
-import "@xpell/xdashboard/dist/xdashboard.css";
+import "@xpell/xdashboard/xdashboard.css";
 
 import "../assets/styles.css";
 import { create_acp_app } from "./app/acp-app.js";
