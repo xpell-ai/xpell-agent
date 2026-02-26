@@ -405,7 +405,7 @@ export class AgentModule extends XModule {
       temperature: 0.2
     });
     const reply_text_raw = ensure_optional_string(chat.text);
-    const reply_text = reply_text_raw ? `${has_kb_context ? "[KB:on]" : "[KB:off]"} ${reply_text_raw}` : undefined;
+    const reply_text = reply_text_raw;
     if (!reply_text) {
       throw new XError("E_AGENT_UPSTREAM", "azure.openai_chat returned empty text");
     }
