@@ -1,0 +1,22 @@
+{
+  "skills": {
+    "allow": [
+      "@xpell/agent-skill-webchat",
+      "xpell-agent-skill-echo",
+      "@xpell/agent-skill-telegram",
+      "@xpell/agent-skill-azure"
+    ],
+    "enabled": [
+      "@xpell/agent-skill-azure",
+      "@xpell/agent-skill-telegram"
+    ],
+    "resolve": {
+      "node_modules": true,
+      "local_paths": [
+        "packages/agent-skill-telegram",
+        "packages/agent-core/examples/skill-echo",
+        "packages/agent-skill-azure"
+      ]
+    }
+  }
+}

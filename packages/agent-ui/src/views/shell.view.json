@@ -1,0 +1,183 @@
+{
+  "_id": "acp-shell",
+  "_type": "view",
+  "class": "acp-shell",
+  "_children": [
+    {
+      "_type": "view",
+      "_id": "acp-shell-topbar",
+      "class": "acp-topbar",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "acp-burger-btn",
+          "class": "acp-burger-btn",
+          "_text": "...",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "drawer_toggle"
+            }
+          }
+        },
+        {
+          "_type": "label",
+          "_id": "acp-topbar-title",
+          "class": "acp-topbar-title",
+          "_text": "ACP"
+        },
+        {
+          "_type": "button",
+          "_id": "acp-logout-btn",
+          "class": "acp-logout-btn",
+          "_text": "Logout",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "logout"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "view",
+      "_id": "region-main",
+      "class": "acp-main-region"
+    },
+    {
+      "_type": "view",
+      "_id": "acp-drawer-backdrop",
+      "class": "acp-drawer-backdrop",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "drawer_close"
+        }
+      }
+    },
+    {
+      "_type": "view",
+      "_id": "acp-shell-drawer",
+      "class": "acp-drawer",
+      "_children": [
+        {
+          "_type": "label",
+          "class": "acp-drawer-title",
+          "_text": "ACP"
+        },
+        {
+          "_type": "button",
+          "_id": "acp-menu-about-btn",
+          "class": "acp-drawer-link",
+          "_text": "About",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/about"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "acp-menu-admin-users-btn",
+          "class": "acp-drawer-link",
+          "_text": "Admin Users",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/admin-users"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "acp-menu-skills-btn",
+          "class": "acp-drawer-link",
+          "_text": "Skills",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/skills"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "acp-menu-settings-btn",
+          "class": "acp-drawer-link",
+          "_text": "Settings",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/settings"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "acp-menu-logout-btn",
+          "class": "acp-drawer-link",
+          "_text": "Logout",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "logout"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "toast",
+      "_id": "acp-toast",
+      "_open": false,
+      "_text": "",
+      "_variant": "info",
+      "_position": "top-right",
+      "_auto_close_ms": 3200,
+      "_closable": true
+    },
+    {
+      "_type": "view",
+      "_id": "region-overlay",
+      "class": "acp-overlay-region"
+    }
+  ]
+}

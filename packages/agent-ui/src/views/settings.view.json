@@ -1,0 +1,66 @@
+{
+  "_id": "view-settings",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Settings"
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.settings.theme_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "button",
+      "_id": "settings-theme-btn",
+      "class": "acp-secondary-btn",
+      "_text": "Toggle Theme",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "settings_theme_toggle"
+        }
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.settings.server_url_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "input",
+      "_id": "settings-server-url-input",
+      "class": "acp-input",
+      "placeholder": "http://127.0.0.1:3090"
+    },
+    {
+      "_type": "button",
+      "_id": "settings-save-server-url-btn",
+      "class": "acp-primary-btn",
+      "_text": "Save Server URL",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "settings_server_url_save"
+        }
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-note",
+      "_data_source": "acp.ui.settings.notice",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    }
+  ]
+}

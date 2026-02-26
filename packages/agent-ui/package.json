@@ -1,0 +1,39 @@
+{
+  "name": "@xpell/agent-ui",
+  "version": "0.1.0-alpha.0",
+  "description": "Minimal Xpell operational cockpit for @xpell/agent.",
+  "type": "module",
+  "files": [
+    "src",
+    "index.html",
+    "vite.config.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "vite .",
+    "build": "vite build",
+    "start": "vite preview --host 127.0.0.1 --port 4173"
+  },
+  "dependencies": {
+    "@xpell/core": "2.0.0-alpha.10",
+    "@xpell/ui": "2.0.0-alpha.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  },
+  "keywords": [
+    "xpell",
+    "agent-ui",
+    "dashboard",
+    "wormholes",
+    "xvm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AimeVerse/xpell-agent.git"
+  },
+  "author": "Tamir Fridman <tamir@aimeverse.com> (https://github.com/fridman-tamir)",
+  "license": "MIT"
+}

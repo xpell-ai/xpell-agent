@@ -1,0 +1,52 @@
+{
+  "name": "@xpell/agent",
+  "version": "0.1.0-alpha.0",
+  "description": "Minimal deterministic agent runtime for Xpell Node and Wormholes v2.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "public",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "agent:call": "tsx src/cli/call.ts",
+    "agent:smoke": "tsx src/cli/smoke.ts",
+    "dev:settings": "tsx src/dev/dev_settings_smoke.ts"
+  },
+  "dependencies": {
+    "@xpell/core": "2.0.0-alpha.10",
+    "@xpell/node": "2.0.0-alpha.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.13",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [
+    "xpell",
+    "agent",
+    "xnode",
+    "wormholes",
+    "runtime"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AimeVerse/xpell-agent.git"
+  },
+  "author": "Tamir Fridman <tamir@aimeverse.com> (https://github.com/fridman-tamir)",
+  "license": "MIT"
+}

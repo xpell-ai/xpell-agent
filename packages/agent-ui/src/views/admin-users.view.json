@@ -1,0 +1,116 @@
+{
+  "_id": "view-admin-users",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Admin Users"
+    },
+    {
+      "_type": "label",
+      "class": "acp-panel",
+      "_data_source": "acp.ui.admin_users.list_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Add Admin"
+    },
+    {
+      "_type": "input",
+      "_id": "admin-create-name-input",
+      "class": "acp-input",
+      "placeholder": "Name"
+    },
+    {
+      "_type": "input",
+      "_id": "admin-create-username-input",
+      "class": "acp-input",
+      "placeholder": "Username or email"
+    },
+    {
+      "_type": "input",
+      "_id": "admin-create-password-input",
+      "class": "acp-input",
+      "_input_type": "password",
+      "placeholder": "Password"
+    },
+    {
+      "_type": "button",
+      "_id": "admin-create-btn",
+      "class": "acp-primary-btn",
+      "_text": "Add Admin",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "admin_create"
+        }
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Update/Delete Admin"
+    },
+    {
+      "_type": "input",
+      "_id": "admin-edit-id-input",
+      "class": "acp-input",
+      "placeholder": "Admin id"
+    },
+    {
+      "_type": "input",
+      "_id": "admin-edit-name-input",
+      "class": "acp-input",
+      "placeholder": "New name (optional)"
+    },
+    {
+      "_type": "input",
+      "_id": "admin-edit-username-input",
+      "class": "acp-input",
+      "placeholder": "New username/email (optional)"
+    },
+    {
+      "_type": "input",
+      "_id": "admin-edit-password-input",
+      "class": "acp-input",
+      "_input_type": "password",
+      "placeholder": "New password (optional)"
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "admin-update-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Update",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "admin_update"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "admin-delete-btn",
+          "class": "acp-danger-btn",
+          "_text": "Delete",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "admin_delete"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

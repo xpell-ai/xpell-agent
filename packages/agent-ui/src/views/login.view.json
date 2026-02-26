@@ -1,0 +1,65 @@
+{
+  "_id": "view-login",
+  "_type": "view",
+  "class": "acp-page acp-login-page",
+  "_children": [
+    {
+      "_type": "view",
+      "class": "acp-card",
+      "_children": [
+        {
+          "_type": "label",
+          "class": "acp-title",
+          "_text": "Agent Control Panel"
+        },
+        {
+          "_type": "label",
+          "class": "acp-subtitle",
+          "_text": "Admin Login"
+        },
+        {
+          "_type": "label",
+          "_id": "login-message-label",
+          "class": "acp-message",
+          "_data_source": "acp.ui.login_message",
+          "_on_data": {
+            "_op": "set-text-from-data"
+          }
+        },
+        {
+          "_type": "form",
+          "class": "acp-form",
+          "_children": [
+            {
+              "_type": "input",
+              "_id": "acp-login-username",
+              "class": "acp-input",
+              "autocomplete": "username",
+              "placeholder": "Username or email"
+            },
+            {
+              "_type": "input",
+              "_id": "acp-login-password",
+              "class": "acp-input",
+              "_input_type": "password",
+              "autocomplete": "current-password",
+              "placeholder": "Password"
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "login-submit-btn",
+          "class": "acp-primary-btn",
+          "_text": "Login",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "login"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

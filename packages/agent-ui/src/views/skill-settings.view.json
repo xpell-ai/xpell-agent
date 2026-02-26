@@ -1,0 +1,255 @@
+{
+  "_id": "view-skill-settings",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Skill Settings"
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.skill_settings.selected_skill_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Telegram: Bot Token"
+    },
+    {
+      "_type": "input",
+      "_id": "skill-settings-bot-token-input",
+      "class": "acp-input",
+      "_data_source": "acp.ui.skill_settings.bot_token",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      },
+      "placeholder": "123456:ABCDEF..."
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "skill-settings-verify-token-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Verify Token",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_verify_token"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Telegram: Admin Chat IDs (comma-separated)"
+    },
+    {
+      "_type": "input",
+      "_id": "skill-settings-admin-chat-ids-input",
+      "class": "acp-input",
+      "_data_source": "acp.ui.skill_settings.admin_chat_ids",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      },
+      "placeholder": "12345,67890"
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Telegram: Mode"
+    },
+    {
+      "_type": "input",
+      "_id": "skill-settings-mode-input",
+      "class": "acp-input",
+      "_data_source": "acp.ui.skill_settings.mode",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      },
+      "placeholder": "polling"
+    },
+    {
+      "_type": "label",
+      "class": "acp-note",
+      "_text": "Webhook mode is coming in v1."
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "skill-settings-mode-polling-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Use Polling",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_mode_polling"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skill-settings-mode-webhook-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Use Webhook",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_mode_webhook"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "label",
+      "class": "acp-panel",
+      "_data_source": "acp.ui.skill_settings.summary_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.skill_settings.runtime_status_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "skill-settings-service-start-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Start Service",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_service_start"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skill-settings-service-stop-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Stop Service",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_service_stop"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "skill-settings-polling-start-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Start Polling",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_polling_start"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skill-settings-polling-stop-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Stop Polling",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_polling_stop"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skill-settings-status-refresh-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Refresh Status",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_status_refresh"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skill-settings-import-env-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Import Env",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_import_env"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skill-settings-verify-azure-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Verify Azure Key",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_verify_azure"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skill-settings-save-btn",
+          "class": "acp-primary-btn",
+          "_text": "Save",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skill_settings_save"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skill-settings-back-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Back",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "navigate",
+              "_route": "/skills"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

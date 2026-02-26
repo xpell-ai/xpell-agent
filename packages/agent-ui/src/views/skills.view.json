@@ -1,0 +1,68 @@
+{
+  "_id": "view-skills",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Skills"
+    },
+    {
+      "_type": "label",
+      "class": "acp-panel",
+      "_data_source": "acp.ui.skills.list_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "input",
+      "_id": "skills-skill-id-input",
+      "class": "acp-input",
+      "placeholder": "Skill id (example: telegram)"
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "skills-enable-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Enable",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skills_enable"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "skills-disable-btn",
+          "class": "acp-danger-btn",
+          "_text": "Disable",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "skills_disable"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "button",
+      "_id": "skills-open-settings-btn",
+      "class": "acp-primary-btn",
+      "_text": "Open Settings",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "skills_open_settings"
+        }
+      }
+    }
+  ]
+}

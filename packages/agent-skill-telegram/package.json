@@ -1,0 +1,46 @@
+{
+  "name": "@xpell/agent-skill-telegram",
+  "version": "0.1.0-alpha.0",
+  "description": "Telegram connector skill for XBot (admin + customer chats).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@xpell/node": "2.0.0-alpha.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [
+    "xpell",
+    "agent",
+    "skill",
+    "telegram",
+    "xbot"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AimeVerse/xpell-agent.git"
+  },
+  "author": "Tamir Fridman <tamir@aimeverse.com> (https://github.com/fridman-tamir)",
+  "license": "MIT"
+}

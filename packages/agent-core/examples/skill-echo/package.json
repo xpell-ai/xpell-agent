@@ -1,0 +1,14 @@
+{
+  "name": "xpell-agent-skill-echo",
+  "version": "0.1.0-alpha.0",
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    }
+  },
+  "license": "MIT"
+}
