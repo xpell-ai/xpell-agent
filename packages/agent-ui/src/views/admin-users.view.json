@@ -9,12 +9,42 @@
       "_text": "Admin Users"
     },
     {
-      "_type": "label",
-      "class": "acp-panel",
-      "_data_source": "acp.ui.admin_users.list_text",
-      "_on_data": {
-        "_op": "set-text-from-data"
-      }
+      "_type": "view",
+      "class": "acp-table-scroll",
+      "_children": [
+        {
+          "_type": "table",
+          "_id": "admin-users-table",
+          "_data_source": "acp.ui.admin_users.table_rows",
+          "_columns": [
+            {
+              "key": "id",
+              "label": "User ID",
+              "width": "180px"
+            },
+            {
+              "key": "name",
+              "label": "Name",
+              "width": "180px"
+            },
+            {
+              "key": "username",
+              "label": "Username",
+              "width": "220px"
+            },
+            {
+              "key": "role",
+              "label": "Role",
+              "width": "100px"
+            }
+          ],
+          "_dense": true,
+          "_striped": true,
+          "_bordered": true,
+          "_hover": false,
+          "_empty_text": "No admin users"
+        }
+      ]
     },
     {
       "_type": "label",

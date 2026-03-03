@@ -29,6 +29,14 @@ Authoritative root shape:
       "admin_chat_ids": ["12345"],
       "mode": "polling"
     }
+  },
+  "kb": {
+    "source_path": "ruta1_kb_real.md",
+    "default_file": "ruta1_kb.md",
+    "current_path": "/abs/path/to/work/kb/xbot/default/kb.md",
+    "allow_export": false,
+    "export_roles": ["owner", "admin"],
+    "max_export_chars": 8000
   }
 }
 ```
@@ -38,6 +46,17 @@ Stable root keys used now:
 - `agent`
 - `skills`
 - `kb`
+
+KB settings used by the runtime:
+- `kb.source_path`
+  - default: `"ruta1_kb_real.md"` when that file exists in the repo root, otherwise `""`
+  - used only to seed the first current KB file if `kb.md` does not exist yet
+- `kb.current_path`
+  - default: `<work_dir>/kb/<agent_id>/<env>/kb.md`
+  - authoritative current KB file path used by the KB inbox apply flow
+- `kb.default_file`
+  - default: `"ruta1_kb.md"`
+  - canonical KB filename used by `kb.show`, `kb.update_price`, and the mirrored KB write path when no `_kb_file` is provided
 
 Agent profile keys used by ACP:
 - `agent.identity.name`

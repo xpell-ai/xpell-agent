@@ -16,9 +16,14 @@ import {
 } from "@xpell/node";
 
 import { AgentModule } from "../modules/AgentModule.js";
+import { AdminCommandsModule } from "../modules/AdminCommandsModule.js";
+import { BroadcastsModule } from "../modules/BroadcastsModule.js";
 import { ChannelsModule } from "../modules/ChannelsModule.js";
 import { ConversationsModule } from "../modules/ConversationsModule.js";
-import { KnowledgeModule, KNOWLEDGE_MODULE_NAME } from "../modules/KnowledgeModule.js";
+import { IntentRegistryModule } from "../modules/IntentRegistryModule.js";
+import { KnowledgeBaseModule } from "../modules/KnowledgeBaseModule.js";
+import { KNOWLEDGE_MODULE_NAME } from "../modules/KnowledgeModule.js";
+import { QAgentModule } from "../modules/QAgentModule.js";
 import { SettingsModule } from "../modules/SettingsModule.js";
 import { SkillManagerModule, SKILL_MANAGER_MODULE_NAME } from "../modules/SkillManagerModule.js";
 import { USERS_MODULE_NAME, UsersModule } from "../modules/UsersModule.js";
@@ -28,6 +33,7 @@ import { assert_xcmd_shape, context_from_transport_ctx, inject_server_ctx, type 
 const DEFAULT_PORT = 3090;
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_WH_PATH = "/wh/v2";
+const WH_VERSION = 2 as const;
 const RUNTIME_VERSION = "0.1.0-alpha.0";
 const DEFAULT_AGENT_ID = "xbot";
 const DEFAULT_AGENT_ENV = "default";
@@ -117,11 +123,15 @@ export class AgentRuntime {
   private _xnode_server?: XNode;
   private _ws_server?: { close: (cb?: (err?: Error) => void) => void };
   private _agent_module?: AgentModule;
+  private _admin_commands_module?: AdminCommandsModule;
+  private _broadcasts_module?: BroadcastsModule;
   private _users_module?: UsersModule;
   private _conversations_module?: ConversationsModule;
   private _channels_module?: ChannelsModule;
+  private _intent_registry_module?: IntentRegistryModule;
   private _settings_module?: SettingsModule;
-  private _knowledge_module?: KnowledgeModule;
+  private _knowledge_module?: KnowledgeBaseModule;
+  private _qagent_module?: QAgentModule;
   private _skill_manager_module?: SkillManagerModule;
   private _started = false;
 
@@ -162,11 +172,15 @@ export class AgentRuntime {
       _app_id: this._agent_id,
       _env: this._agent_env
     });
+    this._admin_commands_module = new AdminCommandsModule();
+    this._broadcasts_module = new BroadcastsModule({ _app_id: this._agent_id, _env: this._agent_env });
     this._users_module = new UsersModule({ _app_id: this._agent_id, _env: this._agent_env });
     this._conversations_module = new ConversationsModule({ _app_id: this._agent_id, _env: this._agent_env });
     this._channels_module = new ChannelsModule({ _app_id: this._agent_id, _env: this._agent_env });
+    this._intent_registry_module = new IntentRegistryModule({ _app_id: this._agent_id, _env: this._agent_env });
     this._skill_manager_module = new SkillManagerModule({
       agent_id: this._agent_id,
+      agent_env: this._agent_env,
       version: this._version,
       config_path: this._config_path,
       repo_root: path.resolve(process.cwd(), "../.."),
@@ -175,24 +189,41 @@ export class AgentRuntime {
     });
     this._settings_module = new SettingsModule({
       _work_dir: this._work_dir,
+      _agent_id: this._agent_id,
+      _agent_env: this._agent_env,
       _resolve_skill_meta: (skill_id) => this._skill_manager_module?.resolve_skill_settings_meta(skill_id)
     });
-    this._knowledge_module = new KnowledgeModule({
-      _kb_dir: this._kb_dir
+    this._knowledge_module = new KnowledgeBaseModule({
+      _kb_dir: this._kb_dir,
+      _work_dir: this._work_dir,
+      _app_id: this._agent_id,
+      _env: this._agent_env
+    });
+    this._qagent_module = new QAgentModule({
+      _app_id: this._agent_id,
+      _env: this._agent_env
     });
 
     _x.loadModule(this._agent_module);
     _xlog.log("[agent-core] module loaded: agent");
+    _x.loadModule(this._admin_commands_module);
+    _xlog.log("[agent-core] module loaded: admin_cmd");
+    _x.loadModule(this._broadcasts_module);
+    _xlog.log("[agent-core] module loaded: broadcast");
     _x.loadModule(this._users_module);
     _xlog.log("[agent-core] module loaded: users");
     _x.loadModule(this._conversations_module);
     _xlog.log("[agent-core] module loaded: conv");
     _x.loadModule(this._channels_module);
     _xlog.log("[agent-core] module loaded: channels");
+    _x.loadModule(this._intent_registry_module);
+    _xlog.log("[agent-core] module loaded: intent");
     _x.loadModule(this._settings_module);
     _xlog.log("[agent-core] module loaded: settings");
     _x.loadModule(this._knowledge_module);
     _xlog.log("[agent-core] module loaded: kb");
+    _x.loadModule(this._qagent_module);
+    _xlog.log("[agent-core] module loaded: qagent");
     _x.loadModule(this._skill_manager_module);
     _xlog.log("[agent-core] module loaded: skills");
 
@@ -210,6 +241,13 @@ export class AgentRuntime {
       _params: { _ctx: system_ctx }
     });
     _xlog.log("[agent-core] agent init_on_boot complete");
+
+    await _x.execute({
+      _module: "broadcast",
+      _op: "init_on_boot",
+      _params: { _ctx: system_ctx }
+    });
+    _xlog.log("[agent-core] broadcast init_on_boot complete");
 
     await _x.execute({
       _module: USERS_MODULE_NAME,
@@ -239,6 +277,17 @@ export class AgentRuntime {
     });
     _xlog.log("[agent-core] settings init_on_boot complete");
 
+    await _x.execute({
+      _module: "settings",
+      _op: "set",
+      _params: {
+        key: "agent.agent_id",
+        value: this._agent_id,
+        _ctx: system_ctx
+      }
+    });
+    _xlog.log("[agent-core] settings agent.agent_id synced");
+
     await fs.mkdir(this._kb_dir, { recursive: true });
     await _x.execute({
       _module: KNOWLEDGE_MODULE_NAME,
@@ -248,10 +297,32 @@ export class AgentRuntime {
     _xlog.log("[agent-core] kb init_on_boot complete");
 
     await _x.execute({
+      _module: "qagent",
+      _op: "init_on_boot",
+      _params: { _ctx: system_ctx }
+    });
+    _xlog.log("[agent-core] qagent init_on_boot complete");
+
+    await _x.execute({
+      _module: SKILL_MANAGER_MODULE_NAME,
+      _op: "init_on_boot",
+      _params: { _ctx: system_ctx }
+    });
+    _xlog.log("[agent-core] skills init_on_boot complete");
+
+    await _x.execute({
       _module: SKILL_MANAGER_MODULE_NAME,
       _op: "reload_enabled",
       _params: { _ctx: system_ctx }
     });
+    _xlog.log("[agent-core] skills reload_enabled complete");
+
+    await _x.execute({
+      _module: "intent",
+      _op: "init_on_boot",
+      _params: { _ctx: system_ctx }
+    });
+    _xlog.log("[agent-core] intent init_on_boot complete");
 
     await this.start_transport();
 
@@ -306,6 +377,26 @@ export class AgentRuntime {
     };
   }
 
+  private next_env_id(): string {
+    return `env_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
+  }
+
+  private make_hello_envelope(): Record<string, unknown> {
+    return {
+      _v: WH_VERSION,
+      _id: this.next_env_id(),
+      _kind: "HELLO",
+      _ts: Date.now(),
+      _payload: {
+        _protocol: "wormholes",
+        _v: WH_VERSION,
+        _node: "agent-core",
+        _xpell: this._version,
+        _caps: ["reqres", "rest", "ping", "ws"]
+      }
+    };
+  }
+
   private mount_transport_routes(app: any, gateway_opts: WHGatewayOptions): void {
     app.use((req: any, res: any, next: any) => {
       this.apply_cors_headers(res);
@@ -314,6 +405,22 @@ export class AgentRuntime {
         return;
       }
       next();
+    });
+
+    app.get(`${this._wh_path}/hello`, (_req: any, res: any) => {
+      if (typeof res.status === "function") {
+        res.status(200);
+      } else {
+        res.statusCode = 200;
+      }
+      res.setHeader("content-type", "application/json; charset=utf-8");
+      res.setHeader("cache-control", "no-store");
+      const payload = JSON.stringify(this.make_hello_envelope());
+      if (typeof res.send === "function") {
+        res.send(payload);
+        return;
+      }
+      res.end(payload);
     });
 
     // REST compatibility: existing clients send _sid on the REQ envelope.

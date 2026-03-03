@@ -1,0 +1,141 @@
+{
+  "_id": "view-qagent",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "QAgent"
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "qagent-run-quick-btn",
+          "class": "acp-primary-btn",
+          "_text": "Run quick test",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "qagent_run_quick"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "qagent-refresh-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Refresh",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "qagent_refresh"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.qagent.status_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-section-title",
+      "_text": "Last Run"
+    },
+    {
+      "_type": "view",
+      "class": "acp-table-scroll",
+      "_children": [
+        {
+          "_type": "table",
+          "_id": "qagent-run-table",
+          "_data_source": "acp.ui.qagent.run_table_rows",
+          "_columns": [
+            {
+              "key": "run_id",
+              "label": "Run ID",
+              "width": "180px"
+            },
+            {
+              "key": "created_text",
+              "label": "Created",
+              "width": "180px"
+            },
+            {
+              "key": "cases_text",
+              "label": "Cases",
+              "width": "100px"
+            },
+            {
+              "key": "pass_rate_text",
+              "label": "Pass %",
+              "width": "100px"
+            },
+            {
+              "key": "avg_score_text",
+              "label": "Avg score",
+              "width": "100px"
+            }
+          ],
+          "_dense": true,
+          "_striped": true,
+          "_bordered": true,
+          "_hover": false,
+          "_empty_text": "No runs"
+        }
+      ]
+    },
+    {
+      "_type": "label",
+      "class": "acp-section-title",
+      "_text": "Top Failures"
+    },
+    {
+      "_type": "view",
+      "class": "acp-table-scroll",
+      "_children": [
+        {
+          "_type": "table",
+          "_id": "qagent-failures-table",
+          "_data_source": "acp.ui.qagent.failures_table_rows",
+          "_columns": [
+            {
+              "key": "case_id",
+              "label": "Case ID",
+              "width": "160px"
+            },
+            {
+              "key": "question",
+              "label": "Question",
+              "width": "320px"
+            },
+            {
+              "key": "expected_text",
+              "label": "Expected",
+              "width": "260px"
+            },
+            {
+              "key": "score_text",
+              "label": "Score",
+              "width": "100px"
+            }
+          ],
+          "_dense": true,
+          "_striped": true,
+          "_bordered": true,
+          "_hover": false,
+          "_empty_text": "No failures"
+        }
+      ]
+    }
+  ]
+}

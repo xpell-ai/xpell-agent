@@ -139,9 +139,7 @@ async function ensure_channels_xdb(scope: AgentChannelsXdbScope): Promise<Channe
         _env: { _type: "String", _required: true, _index: true },
         _channel: { _type: "String", _required: true, _index: true },
         _connector_module: { _type: "String", _required: true },
-        _config_json: { _type: "String" },
-        _created_at: { _type: "Number", _required: true, _index: true },
-        _updated_at: { _type: "Number", _required: true, _index: true }
+        _config_json: { _type: "String" }
       }
     }) as XDBEntity;
 
@@ -208,9 +206,7 @@ export async function upsert_registration_xdb(
     _env: scope._env,
     _channel: record.channel,
     _connector_module: record.connector_module,
-    _config_json: to_json(record.config),
-    _created_at: record.created_at,
-    _updated_at: record.updated_at
+    _config_json: to_json(record.config)
   };
 
   if (existing.length > 0) {

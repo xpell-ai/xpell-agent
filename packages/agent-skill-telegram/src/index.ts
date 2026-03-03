@@ -12,6 +12,8 @@ type XBotSkillCapability = {
 
 type XBotSkillContext = {
   execute(module: string, op: string, params?: unknown, meta?: unknown): Promise<unknown>;
+  state_get(key: string): Promise<unknown>;
+  state_set(key: string, value: unknown): Promise<void>;
   registerModule(moduleInstance: unknown): void;
   emit(eventName: string, payload: unknown): void;
   log(level: "debug" | "info" | "warn" | "error", msg: string, meta?: unknown): void;
@@ -40,6 +42,55 @@ type XBotSkill = {
     };
   };
   capabilities?: XBotSkillCapability;
+  actions?: Array<{
+    id: string;
+    label: string;
+    kind?: "primary" | "secondary" | "danger";
+    op: {
+      module: string;
+      op: string;
+    };
+    params_schema?: {
+      title?: string;
+      fields: Array<{
+        key: string;
+        label: string;
+        type: "string" | "number" | "boolean" | "select";
+        help?: string;
+        options?: Array<{ label: string; value: unknown }>;
+        placeholder?: string;
+      }>;
+    };
+    confirm?: {
+      title: string;
+      body: string;
+    };
+  }>;
+  intents?: Array<{
+    intent_id: string;
+    title: string;
+    description?: string;
+    roles_allowed: Array<"owner" | "admin" | "customer">;
+    channels_allowed?: string[];
+    handler: {
+      module: string;
+      op: string;
+    };
+    params_schema?: {
+      title?: string;
+      fields: Array<{
+        key: string;
+        label: string;
+        type: "string" | "number" | "boolean" | "select" | "string_list" | "json";
+        help?: string;
+        secret?: boolean;
+        options?: Array<{ label: string; value: unknown }>;
+        placeholder?: string;
+      }>;
+    };
+    examples?: string[];
+    synonyms?: string[];
+  }>;
   onEnable(ctx: XBotSkillContext): Promise<void> | void;
   onDisable?(ctx: XBotSkillContext): Promise<void> | void;
 };
@@ -98,8 +149,51 @@ export const skill: XBotSkill = {
   capabilities: {
     channels: ["telegram"],
     network: true,
-    kernel_ops: ["channels.route_inbound_message", "channels.send_message", "conv.list_threads", "agent.handle_inbound"]
+    kernel_ops: [
+      "channels.route_inbound_message",
+      "skills.state_get",
+      "skills.state_set"
+    ]
   },
+  actions: [
+    {
+      id: "status",
+      label: "Status",
+      kind: "secondary",
+      op: { module: "telegram", op: "status" }
+    },
+    {
+      id: "start",
+      label: "Start",
+      kind: "primary",
+      op: { module: "telegram", op: "start" }
+    },
+    {
+      id: "stop",
+      label: "Stop",
+      kind: "danger",
+      op: { module: "telegram", op: "stop" },
+      confirm: {
+        title: "Stop Telegram Bot?",
+        body: "This will stop polling."
+      }
+    }
+  ],
+  intents: [
+    {
+      intent_id: "admin.conv.summary",
+      title: "Conversation Summary",
+      description: "Summarize recent customer conversations for admins.",
+      roles_allowed: ["admin", "owner"],
+      channels_allowed: ["telegram"],
+      handler: {
+        module: "admin_cmd",
+        op: "conv_summary"
+      },
+      examples: ["summarize today", "give me a summary of conversations"],
+      synonyms: ["conversation summary", "summarize chats", "summary"]
+    }
+  ],
   async onEnable(ctx) {
     _xlog.log("[agent-core][telegram] skill enable start", { skill_id: ctx.skill.id, version: ctx.skill.version });
     ctx.registerModule(new TelegramConnectorModule(ctx));

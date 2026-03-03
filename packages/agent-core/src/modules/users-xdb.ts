@@ -22,12 +22,13 @@ export type PersistedUserRecord = {
   _id: string;
   _app_id: string;
   _env: string;
-  _user_id: string;
   _role: BotUserRole;
   _display_name: string;
   _identities: BotIdentity[];
   _created_at: number;
   _updated_at: number;
+  _display_id?: string;
+  _user_id?: string;
   _username?: string;
   _password_digest?: string;
 };
@@ -114,21 +115,25 @@ function normalize_identities(value: unknown): BotIdentity[] {
 function normalize_user_record(scope: AgentUsersXdbScope, value: unknown): PersistedUserRecord | undefined {
   if (!is_plain_object(value)) return undefined;
 
-  const user_id = to_text(value._user_id || value._id);
+  const user_id = to_text(value._id);
+  const legacy_user_id = to_text(value._user_id);
   const role = normalize_role(value._role);
   const display_name = to_text(value._display_name);
   if (!user_id || !display_name) return undefined;
+
+  const display_id = to_text(value._display_id) || legacy_user_id;
 
   return {
     _id: user_id,
     _app_id: scope._app_id,
     _env: scope._env,
-    _user_id: user_id,
     _role: role,
     _display_name: display_name,
     _identities: normalize_identities(value._identities),
     _created_at: to_ts(value._created_at),
     _updated_at: to_ts(value._updated_at),
+    ...(display_id ? { _display_id: display_id } : {}),
+    ...(legacy_user_id ? { _user_id: legacy_user_id } : {}),
     ...(to_text(value._username) ? { _username: to_text(value._username).toLowerCase() } : {}),
     ...(to_text(value._password_digest) ? { _password_digest: to_text(value._password_digest) } : {})
   };
@@ -172,6 +177,15 @@ function ensure_xdb_result<T>(res: XResponseData, label: string): T {
     throw new Error(`[agent-users:xdb] ${label} failed: ${message}`);
   }
   return res._result as T;
+}
+
+function schema_requires_legacy_user_id(entity: unknown): boolean {
+  if (!entity || typeof entity !== "object") return false;
+  const schema = (entity as { _schema?: unknown })._schema;
+  if (!is_plain_object(schema)) return false;
+  const field = schema._user_id;
+  if (!is_plain_object(field)) return false;
+  return field._required === true;
 }
 
 function scope_key(scope: AgentUsersXdbScope): string {
@@ -237,12 +251,11 @@ async function ensure_users_xdb(scope: AgentUsersXdbScope): Promise<UsersXdb> {
       _schema: {
         _app_id: { _type: "String", _required: true, _index: true },
         _env: { _type: "String", _required: true, _index: true },
-        _user_id: { _type: "String", _required: true, _index: true },
         _role: { _type: "String", _required: true, _index: true },
         _display_name: { _type: "String", _required: true },
         _identities: { _type: "Array" },
-        _created_at: { _type: "Number", _required: true, _index: true },
-        _updated_at: { _type: "Number", _required: true, _index: true },
+        _display_id: { _type: "String", _index: true },
+        _user_id: { _type: "String", _index: true },
         _username: { _type: "String", _index: true },
         _password_digest: { _type: "String" }
       }
@@ -255,9 +268,7 @@ async function ensure_users_xdb(scope: AgentUsersXdbScope): Promise<UsersXdb> {
         _app_id: { _type: "String", _required: true, _index: true },
         _env: { _type: "String", _required: true, _index: true },
         _token: { _type: "String", _required: true, _index: true },
-        _user_id: { _type: "String", _required: true, _index: true },
-        _created_at: { _type: "Number", _required: true, _index: true },
-        _updated_at: { _type: "Number", _required: true, _index: true }
+        _user_id: { _type: "String", _required: true, _index: true }
       }
     }) as XDBEntity;
 
@@ -292,26 +303,27 @@ export async function list_users_xdb(scope: AgentUsersXdbScope): Promise<Persist
 
 export async function list_user_ids_xdb(scope: AgentUsersXdbScope): Promise<string[]> {
   const users = await list_users_xdb(scope);
-  return users.map((user) => user._user_id);
+  return users.map((user) => user._id);
 }
 
 export async function upsert_user_xdb(scope: AgentUsersXdbScope, record: PersistedUserRecord): Promise<void> {
   if (has_function(record)) throw new Error("Persisted user record must be JSON-safe");
 
   const xdb = await ensure_users_xdb(scope);
-  const filter = { _app_id: scope._app_id, _env: scope._env, _user_id: record._user_id };
+  const filter = { _app_id: scope._app_id, _env: scope._env, _id: record._id };
   const existing = ensure_xdb_result<{ _data: unknown[] }>(xdb._users.find(filter, 0, 1), "find_user")._data;
+  const legacy_user_id =
+    to_text(record._user_id) || to_text(record._display_id) || record._id;
 
   const row = {
-    _id: record._user_id,
+    _id: record._id,
     _app_id: scope._app_id,
     _env: scope._env,
-    _user_id: record._user_id,
     _role: record._role,
     _display_name: record._display_name,
     _identities: record._identities.map((identity) => ({ ...identity })),
-    _created_at: record._created_at,
-    _updated_at: record._updated_at,
+    _display_id: record._display_id ?? "",
+    ...(schema_requires_legacy_user_id(xdb._users) ? { _user_id: legacy_user_id } : {}),
     _username: record._username ?? "",
     _password_digest: record._password_digest ?? ""
   };
@@ -326,7 +338,7 @@ export async function upsert_user_xdb(scope: AgentUsersXdbScope, record: Persist
 
 export async function delete_user_xdb(scope: AgentUsersXdbScope, user_id: string): Promise<void> {
   const xdb = await ensure_users_xdb(scope);
-  await xdb._users.delete({ _app_id: scope._app_id, _env: scope._env, _user_id: user_id }, true);
+  await xdb._users.delete({ _app_id: scope._app_id, _env: scope._env, _id: user_id }, true);
 }
 
 export async function list_sessions_xdb(scope: AgentUsersXdbScope): Promise<PersistedSessionRecord[]> {
@@ -359,9 +371,7 @@ export async function upsert_session_xdb(scope: AgentUsersXdbScope, record: Pers
     _app_id: scope._app_id,
     _env: scope._env,
     _token: record._token,
-    _user_id: record._user_id,
-    _created_at: record._created_at,
-    _updated_at: record._updated_at
+    _user_id: record._user_id
   };
 
   if (existing.length > 0) {

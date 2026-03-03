@@ -61,6 +61,23 @@
       "_on_data": {
         "_op": "set-text-from-data"
       }
+    },
+    {
+      "_type": "label",
+      "class": "acp-note",
+      "_text": "Danger zone: Reset DB deletes all conversations, users, and sessions."
+    },
+    {
+      "_type": "button",
+      "_id": "settings-reset-db-btn",
+      "class": "acp-danger-btn",
+      "_text": "Reset DB",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "settings_reset_db"
+        }
+      }
     }
   ]
 }

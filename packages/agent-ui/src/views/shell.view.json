@@ -110,6 +110,90 @@
         },
         {
           "_type": "button",
+          "_id": "acp-menu-qagent-btn",
+          "class": "acp-drawer-link",
+          "_text": "QAgent",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/qagent"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "acp-menu-conversations-btn",
+          "class": "acp-drawer-link",
+          "_text": "Conversations",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/conversations"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "acp-menu-intents-btn",
+          "class": "acp-drawer-link",
+          "_text": "Intents",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/intents"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "acp-menu-users-btn",
+          "class": "acp-drawer-link",
+          "_text": "Users",
+          "_on_click": [
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "drawer_close"
+              }
+            },
+            {
+              "_op": "acp-ui-action",
+              "_params": {
+                "_action": "navigate",
+                "_route": "/users"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "button",
           "_id": "acp-menu-admin-users-btn",
           "class": "acp-drawer-link",
           "_text": "Admin Users",

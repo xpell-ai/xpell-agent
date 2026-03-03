@@ -214,6 +214,44 @@ body {
   gap: var(--x-space-1);
 }
 
+.acp-dynamic-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x-space-2);
+}
+
+.acp-dynamic-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x-space-1);
+}
+
+.acp-checkbox {
+  width: 20px;
+  height: 20px;
+}
+
+.acp-link-action {
+  color: var(--x-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.acp-link-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x-space-2);
+  flex-wrap: wrap;
+}
+
+.acp-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 10px;
+}
+
 .acp-drawer-backdrop {
   position: fixed;
   inset: 0;

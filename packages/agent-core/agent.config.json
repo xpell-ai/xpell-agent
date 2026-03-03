@@ -18,5 +18,8 @@
         "packages/agent-skill-azure"
       ]
     }
+  },
+  "agent": {
+    "agent_id": "xbot"
   }
 }

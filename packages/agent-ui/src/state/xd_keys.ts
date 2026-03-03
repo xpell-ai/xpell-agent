@@ -5,19 +5,31 @@ export const REGION_MAIN = "main";
 export const REGION_OVERLAY = "overlay";
 
 export const ROUTE_LOGIN = "/login";
+export const ROUTE_SETUP_ADMIN = "/setup-admin";
 export const ROUTE_ABOUT = "/about";
 export const ROUTE_AGENT = "/agent";
+export const ROUTE_QAGENT = "/qagent";
+export const ROUTE_CONVERSATIONS = "/conversations";
+export const ROUTE_CONVERSATION_DETAILS = "/conversations-thread";
+export const ROUTE_INTENTS = "/intents";
+export const ROUTE_USERS = "/users";
 export const ROUTE_ADMIN_USERS = "/admin-users";
 export const ROUTE_SKILLS = "/skills";
-export const ROUTE_SKILL_SETTINGS = "/skill-settings/:skillId";
+export const ROUTE_SKILL_SETTINGS = "/skills-config";
 export const ROUTE_SETTINGS = "/settings";
 
 export const VIEW_LOGIN = "view-login";
+export const VIEW_SETUP_ADMIN = "view-setup-admin";
 export const VIEW_ABOUT = "view-about";
 export const VIEW_AGENT = "view-agent";
+export const VIEW_QAGENT = "view-qagent";
+export const VIEW_CONVERSATIONS = "view-conversations";
+export const VIEW_CONVERSATION_DETAILS = "view-conversation-thread";
+export const VIEW_INTENTS = "view-intents";
+export const VIEW_USERS = "view-users";
 export const VIEW_ADMIN_USERS = "view-admin-users";
 export const VIEW_SKILLS = "view-skills";
-export const VIEW_SKILL_SETTINGS = "view-skill-settings";
+export const VIEW_SKILL_SETTINGS = "skills-config";
 export const VIEW_SETTINGS = "view-settings";
 
 export const UI_ACTION_COMMAND = "acp-ui-action";
@@ -37,9 +49,14 @@ export const KEY_AUTH_USER = "acp.auth.user";
 export const KEY_UI_DRAWER_OPEN = "acp.ui.drawer_open";
 export const KEY_UI_ROUTE = "acp.ui.route";
 export const KEY_UI_THEME = "acp.ui.theme";
+export const KEY_UI_BOOTSTRAP_MODE = "acp.ui.bootstrap_mode";
 
 export const KEY_ABOUT = "acp.about";
 export const KEY_AGENT_PROFILE = "acp.agent.profile";
+export const KEY_QAGENT = "acp.qagent";
+export const KEY_CONVERSATIONS = "acp.conversations";
+export const KEY_INTENTS = "acp.intents";
+export const KEY_USERS = "acp.users";
 export const KEY_ADMIN_USERS = "acp.admin_users";
 export const KEY_SKILLS = "acp.skills";
 export const KEY_SKILL_SETTINGS = "acp.skill_settings";
@@ -58,17 +75,39 @@ export const KEY_UI_AGENT_RUNTIME_VERSION_TEXT = "acp.ui.agent.runtime_version_t
 export const KEY_UI_AGENT_XPELL_VERSION_TEXT = "acp.ui.agent.xpell_version_text";
 export const KEY_UI_AGENT_CONNECTED_TEXT = "acp.ui.agent.connected_text";
 export const KEY_UI_AGENT_FORM_SUMMARY_TEXT = "acp.ui.agent.form_summary_text";
+export const KEY_UI_QAGENT_STATUS_TEXT = "acp.ui.qagent.status_text";
+export const KEY_UI_QAGENT_RUN_TABLE_ROWS = "acp.ui.qagent.run_table_rows";
+export const KEY_UI_QAGENT_FAILURES_TABLE_ROWS = "acp.ui.qagent.failures_table_rows";
+
+export const KEY_UI_CONVERSATIONS_STATUS_TEXT = "acp.ui.conversations.status_text";
+export const KEY_UI_CONVERSATIONS_TABLE_ROWS = "acp.ui.conversations.table_rows";
+export const KEY_UI_CONVERSATION_ROUTE_ARGS = "acp.ui.conversation.route_args";
+export const KEY_UI_CONVERSATION_DETAIL_HEADER_TEXT = "acp.ui.conversation_detail.header_text";
+export const KEY_UI_CONVERSATION_DETAIL_STATUS_TEXT = "acp.ui.conversation_detail.status_text";
+export const KEY_UI_CONVERSATION_MESSAGES_TABLE_ROWS = "acp.ui.conversation_detail.table_rows";
+export const KEY_UI_INTENTS_STATUS_TEXT = "acp.ui.intents.status_text";
+export const KEY_UI_INTENTS_TABLE_ROWS = "acp.ui.intents.table_rows";
+export const KEY_UI_USERS_LIST_TEXT = "acp.ui.users.list_text";
+export const KEY_UI_USERS_STATUS_TEXT = "acp.ui.users.status_text";
+export const KEY_UI_USERS_TABLE_ROWS = "acp.ui.users.table_rows";
 
 export const KEY_UI_ADMIN_USERS_LIST_TEXT = "acp.ui.admin_users.list_text";
+export const KEY_UI_ADMIN_USERS_TABLE_ROWS = "acp.ui.admin_users.table_rows";
 export const KEY_UI_SKILLS_LIST_TEXT = "acp.ui.skills.list_text";
+export const KEY_UI_SKILLS_TABLE_ROWS = "acp.ui.skills.table_rows";
 
 export const KEY_UI_SKILL_SELECTED_ID = "acp.ui.skill_settings.selected_skill_id";
+export const KEY_UI_SKILL_ROUTE_ARGS = "acp.ui.skill_settings.route_args";
 export const KEY_UI_SKILL_SELECTED_TEXT = "acp.ui.skill_settings.selected_skill_text";
 export const KEY_UI_SKILL_BOT_TOKEN = "acp.ui.skill_settings.bot_token";
 export const KEY_UI_SKILL_ADMIN_CHAT_IDS = "acp.ui.skill_settings.admin_chat_ids";
 export const KEY_UI_SKILL_MODE = "acp.ui.skill_settings.mode";
 export const KEY_UI_SKILL_SETTINGS_SUMMARY_TEXT = "acp.ui.skill_settings.summary_text";
 export const KEY_UI_SKILL_RUNTIME_STATUS_TEXT = "acp.ui.skill_settings.runtime_status_text";
+export const KEY_UI_SKILL_ACTION_RESULT_TEXT = "acp.ui.skill_settings.action_result_text";
+export const KEY_UI_INTENT_SELECTED_ID = "acp.ui.intents.selected_intent_id";
+export const KEY_UI_INTENT_SELECTED_TEXT = "acp.ui.intents.selected_text";
+export const KEY_UI_INTENT_FORM_SUMMARY_TEXT = "acp.ui.intents.form_summary_text";
 
 export const KEY_UI_SETTINGS_THEME_TEXT = "acp.ui.settings.theme_text";
 export const KEY_UI_SETTINGS_SERVER_URL_TEXT = "acp.ui.settings.server_url_text";
@@ -76,6 +115,7 @@ export const KEY_UI_SETTINGS_NOTICE = "acp.ui.settings.notice";
 
 export const ACTION_NAVIGATE = "navigate";
 export const ACTION_LOGIN = "login";
+export const ACTION_SETUP_ADMIN_CREATE = "setup_admin_create";
 export const ACTION_LOGOUT = "logout";
 export const ACTION_DRAWER_TOGGLE = "drawer_toggle";
 export const ACTION_DRAWER_CLOSE = "drawer_close";
@@ -83,6 +123,17 @@ export const ACTION_DRAWER_CLOSE = "drawer_close";
 export const ACTION_REFRESH_ABOUT = "refresh_about";
 export const ACTION_AGENT_SAVE = "agent_save";
 export const ACTION_AGENT_RESET_DEFAULTS = "agent_reset_defaults";
+export const ACTION_QAGENT_RUN_QUICK = "qagent_run_quick";
+export const ACTION_QAGENT_REFRESH = "qagent_refresh";
+export const ACTION_CONVERSATIONS_REFRESH = "conversations_refresh";
+export const ACTION_CONVERSATIONS_OPEN = "conversations_open";
+export const ACTION_INTENTS_REFRESH = "intents_refresh";
+export const ACTION_INTENTS_EDIT = "intents_edit";
+export const ACTION_INTENTS_SAVE = "intents_save";
+export const ACTION_USERS_SEARCH = "users_search";
+export const ACTION_USERS_REFRESH = "users_refresh";
+export const ACTION_USERS_PROMOTE_ADMIN = "users_promote_admin";
+export const ACTION_USERS_DEMOTE_CUSTOMER = "users_demote_customer";
 
 export const ACTION_ADMIN_CREATE = "admin_create";
 export const ACTION_ADMIN_UPDATE = "admin_update";
@@ -106,6 +157,7 @@ export const ACTION_SKILL_VERIFY_AZURE = "skill_verify_azure";
 
 export const ACTION_SETTINGS_THEME_TOGGLE = "settings_theme_toggle";
 export const ACTION_SETTINGS_SERVER_URL_SAVE = "settings_server_url_save";
+export const ACTION_SETTINGS_RESET_DB = "settings_reset_db";
 
 export const ID_SHELL = "acp-shell";
 export const ID_TOPBAR = "acp-shell-topbar";
@@ -119,14 +171,31 @@ export const UI_COMMAND_OBJECT_IDS: string[] = [
   "acp-drawer-backdrop",
   "acp-menu-about-btn",
   "acp-menu-agent-btn",
+  "acp-menu-qagent-btn",
+  "acp-menu-conversations-btn",
+  "acp-menu-intents-btn",
+  "acp-menu-users-btn",
   "acp-menu-admin-users-btn",
   "acp-menu-skills-btn",
   "acp-menu-settings-btn",
   "acp-menu-logout-btn",
   "login-submit-btn",
+  "setup-admin-submit-btn",
   "about-refresh-btn",
   "agent-save-btn",
   "agent-reset-btn",
+  "qagent-run-quick-btn",
+  "qagent-refresh-btn",
+  "conversations-refresh-btn",
+  "conversations-open-btn",
+  "conversation-detail-refresh-btn",
+  "intents-refresh-btn",
+  "intents-edit-btn",
+  "intents-save-btn",
+  "users-search-btn",
+  "users-refresh-btn",
+  "users-promote-btn",
+  "users-demote-btn",
   "admin-create-btn",
   "admin-update-btn",
   "admin-delete-btn",
@@ -146,5 +215,6 @@ export const UI_COMMAND_OBJECT_IDS: string[] = [
   "skill-settings-save-btn",
   "skill-settings-back-btn",
   "settings-theme-btn",
-  "settings-save-server-url-btn"
+  "settings-save-server-url-btn",
+  "settings-reset-db-btn"
 ];

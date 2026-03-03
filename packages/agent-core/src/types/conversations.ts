@@ -14,6 +14,11 @@ export type ConversationThread = {
   created_at: number;
   updated_at: number;
   tags: string[];
+  pending_action_type?: string;
+  pending_action_id?: string;
+  pending_action_payload_json?: string;
+  pending_action_created_at?: number;
+  pending_action_expires_at?: number;
 };
 
 export type ConversationMessage = {
@@ -26,4 +31,3 @@ export type ConversationMessage = {
   channel_message_id?: string;
   meta?: Record<string, unknown>;
 };
-

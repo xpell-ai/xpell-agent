@@ -14,11 +14,17 @@ import {
 import type { SettingsGetSkillResult, SkillSettingsMeta, XSettingsSchema, XSettingsSchemaFieldType } from "../types/settings.js";
 
 export const SETTINGS_MODULE_NAME = "settings";
+const DEFAULT_AGENT_NAME = "XBot";
+const DEFAULT_AGENT_ROLE = "Assistant";
+const DEFAULT_AGENT_SYSTEM_PROMPT =
+  "You are {agent_name} ({agent_id}), a helpful {agent_role}. Reply in the user's language; Spanish if they write Spanish, English otherwise.";
 
 type Dict = Record<string, unknown>;
 
 type SettingsModuleOptions = {
   _work_dir?: string;
+  _agent_id?: string;
+  _agent_env?: string;
   _resolve_skill_meta?: (skill_id: string) => SkillSettingsMeta | undefined;
 };
 
@@ -86,11 +92,15 @@ export class SettingsModule extends XModule {
   static _name = SETTINGS_MODULE_NAME;
 
   private _work_dir: string;
+  private _agent_id: string;
+  private _agent_env: string;
   private _resolve_skill_meta?: (skill_id: string) => SkillSettingsMeta | undefined;
 
   constructor(opts: SettingsModuleOptions = {}) {
     super({ _name: SETTINGS_MODULE_NAME });
     this._work_dir = path.resolve(opts._work_dir ?? path.resolve(process.cwd(), "work"));
+    this._agent_id = typeof opts._agent_id === "string" && opts._agent_id.trim() ? opts._agent_id.trim() : "xbot";
+    this._agent_env = typeof opts._agent_env === "string" && opts._agent_env.trim() ? opts._agent_env.trim() : "default";
     this._resolve_skill_meta = opts._resolve_skill_meta;
   }
 
@@ -329,21 +339,31 @@ export class SettingsModule extends XModule {
     }
 
     const agent_settings = is_plain_object(root.agent) ? clone_json(root.agent) : {};
+    if (!Object.prototype.hasOwnProperty.call(agent_settings, "agent_id")) {
+      agent_settings.agent_id = "";
+    }
     if (!Object.prototype.hasOwnProperty.call(agent_settings, "name")) {
-      agent_settings.name = "XBot";
+      agent_settings.name = DEFAULT_AGENT_NAME;
+    }
+    if (!Object.prototype.hasOwnProperty.call(agent_settings, "role")) {
+      agent_settings.role = DEFAULT_AGENT_ROLE;
+    }
+    if (!Object.prototype.hasOwnProperty.call(agent_settings, "system_prompt")) {
+      agent_settings.system_prompt = DEFAULT_AGENT_SYSTEM_PROMPT;
     }
     if (!Object.prototype.hasOwnProperty.call(agent_settings, "business_name")) {
       agent_settings.business_name = "Ruta1";
     }
     const identity_settings = is_plain_object(agent_settings.identity) ? clone_json(agent_settings.identity) : {};
     if (!Object.prototype.hasOwnProperty.call(identity_settings, "name")) {
-      identity_settings.name = "XBot";
+      identity_settings.name = typeof agent_settings.name === "string" ? agent_settings.name : DEFAULT_AGENT_NAME;
     }
     if (!Object.prototype.hasOwnProperty.call(identity_settings, "role")) {
-      identity_settings.role = "";
+      identity_settings.role = typeof agent_settings.role === "string" ? agent_settings.role : DEFAULT_AGENT_ROLE;
     }
     if (!Object.prototype.hasOwnProperty.call(identity_settings, "system_prompt")) {
-      identity_settings.system_prompt = "";
+      identity_settings.system_prompt =
+        typeof agent_settings.system_prompt === "string" ? agent_settings.system_prompt : DEFAULT_AGENT_SYSTEM_PROMPT;
     }
     if (!Object.prototype.hasOwnProperty.call(identity_settings, "language_policy")) {
       identity_settings.language_policy = "auto";
@@ -355,6 +375,15 @@ export class SettingsModule extends XModule {
     const export_roles = normalize_string_array(kb_settings.export_roles).filter(
       (role): role is "owner" | "admin" => role === "owner" || role === "admin"
     );
+    if (!Object.prototype.hasOwnProperty.call(kb_settings, "source_path")) {
+      kb_settings.source_path = fs.existsSync(path.resolve(process.cwd(), "ruta1_kb_real.md")) ? "ruta1_kb_real.md" : "";
+    }
+    if (!Object.prototype.hasOwnProperty.call(kb_settings, "default_file")) {
+      kb_settings.default_file = "ruta1_kb.md";
+    }
+    if (!Object.prototype.hasOwnProperty.call(kb_settings, "current_path")) {
+      kb_settings.current_path = path.resolve(this._work_dir, "kb", this._agent_id, this._agent_env, "kb.md");
+    }
     kb_settings.allow_export = normalize_boolean(kb_settings.allow_export, false);
     kb_settings.export_roles = export_roles.length > 0 ? export_roles : ["owner", "admin"];
     kb_settings.max_export_chars = normalize_positive_int(kb_settings.max_export_chars, 8000);

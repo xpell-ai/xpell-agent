@@ -1,0 +1,102 @@
+{
+  "_id": "view-conversations",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Conversations"
+    },
+    {
+      "_type": "button",
+      "_id": "conversations-refresh-btn",
+      "class": "acp-primary-btn",
+      "_text": "Refresh",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "conversations_refresh"
+        }
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.conversations.status_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "view",
+      "class": "acp-table-scroll",
+      "_children": [
+        {
+          "_type": "table",
+          "_id": "conversations-table",
+          "_data_source": "acp.ui.conversations.table_rows",
+          "_columns": [
+            {
+              "key": "thread_id",
+              "label": "Thread ID",
+              "width": "180px"
+            },
+            {
+              "key": "channel",
+              "label": "Channel",
+              "width": "100px"
+            },
+            {
+              "key": "channel_thread_id",
+              "label": "Channel Thread",
+              "width": "180px"
+            },
+            {
+              "key": "user_id",
+              "label": "User",
+              "width": "160px"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "width": "100px"
+            },
+            {
+              "key": "updated_text",
+              "label": "Updated",
+              "width": "180px"
+            },
+            {
+              "key": "action",
+              "label": "Actions",
+              "width": "100px"
+            }
+          ],
+          "_dense": true,
+          "_striped": true,
+          "_bordered": true,
+          "_hover": false,
+          "_empty_text": "No conversations"
+        }
+      ]
+    },
+    {
+      "_type": "input",
+      "_id": "conversations-action-thread-id-input",
+      "style": "display:none"
+    },
+    {
+      "_type": "button",
+      "_id": "conversations-open-btn",
+      "style": "display:none",
+      "_text": "Open",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "conversations_open"
+        }
+      }
+    }
+  ]
+}

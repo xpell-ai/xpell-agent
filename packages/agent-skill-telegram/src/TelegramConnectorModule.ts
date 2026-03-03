@@ -18,6 +18,8 @@ type SkillLogLevel = "debug" | "info" | "warn" | "error";
 
 type SkillContext = {
   execute(module: string, op: string, params?: any, meta?: any): Promise<any>;
+  state_get(key: string): Promise<any>;
+  state_set(key: string, value: any): Promise<void>;
   log(level: SkillLogLevel, msg: string, meta?: any): void;
   skill: { id: string; version: string };
 };
@@ -121,14 +123,6 @@ function message_preview(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= 64) return normalized;
   return `${normalized.slice(0, 64)}...`;
-}
-
-function is_start_command(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed.startsWith("/")) return false;
-  const [command] = trimmed.split(/\s+/g);
-  const normalized = command.toLowerCase();
-  return normalized === "/start" || normalized.startsWith("/start@");
 }
 
 export class TelegramConnectorModule extends XModule {
@@ -418,6 +412,7 @@ export class TelegramConnectorModule extends XModule {
       });
     }
 
+    await this.restore_last_update_id_from_state();
     this._running = true;
     this._consecutive_errors = 0;
     this.start_poll_task();
@@ -515,6 +510,7 @@ export class TelegramConnectorModule extends XModule {
     }
 
     await this.handle_update(update, "webhook");
+    await this.persist_last_update_id();
     return { ok: true };
   }
 
@@ -538,6 +534,7 @@ export class TelegramConnectorModule extends XModule {
   }
 
   private async poll_once(): Promise<boolean> {
+    const batch_start_last_update_id = this._last_update_id;
     try {
       const updates = await telegram_get_updates({
         bot_token: this.require_bot_token(),
@@ -564,6 +561,10 @@ export class TelegramConnectorModule extends XModule {
         } catch (err) {
           this._ctx.log("warn", "telegram update handling failed", { error: format_error(err) });
         }
+      }
+
+      if (this._last_update_id !== batch_start_last_update_id) {
+        await this.persist_last_update_id();
       }
 
       return this._running;
@@ -594,208 +595,39 @@ export class TelegramConnectorModule extends XModule {
       this._last_update_id = normalized.update_id;
     }
 
-    const is_admin = this._config.admins.chat_ids.includes(normalized.chat_id);
     _xlog.log(`${TG_LOG_PREFIX} inbound message`, {
       source,
       update_id: normalized.update_id,
       chat_id: normalized.chat_id,
       from_id: normalized.from_id,
-      role: is_admin ? "admin" : "customer",
       text_preview: message_preview(normalized.text)
     });
-    if (is_admin) {
-      await this.handle_admin_message(normalized, source);
-      return;
-    }
-
     await this.handle_customer_message(normalized, source);
   }
 
-  private async handle_admin_message(inbound: NormalizedTelegramInbound, source: "polling" | "webhook"): Promise<void> {
-    const trimmed = inbound.text.trim();
-    if (is_start_command(trimmed)) {
-      await this.send_direct_message(
-        inbound.chat_id,
-        [
-          "Welcome, admin.",
-          "Available commands:",
-          "/status",
-          "/customers [N]",
-          "/say <chat_id> <text>"
-        ].join("\n")
-      );
-      return;
-    }
-    if (!trimmed.startsWith("/")) {
-      await this.handle_customer_message(inbound, source);
-      return;
-    }
-
-    const [raw_command, ...args] = trimmed.split(/\s+/g);
-    const command = raw_command.toLowerCase();
-
-    if (command === "/status") {
-      await this.reply_admin_status(inbound.chat_id);
-      return;
-    }
-
-    if (command === "/customers") {
-      const limit = this.parse_limit(args[0], 10, 50);
-      await this.reply_admin_customers(inbound.chat_id, limit);
-      return;
-    }
-
-    if (command === "/say") {
-      await this.reply_admin_say(inbound.chat_id, args);
-      return;
-    }
-
-    await this.send_direct_message(
-      inbound.chat_id,
-      [
-        "Unknown admin command.",
-        "Available:",
-        "/status",
-        "/customers [N]",
-        "/say <chat_id> <text>"
-      ].join("\n")
-    );
-  }
-
-  private async reply_admin_status(chat_id: string): Promise<void> {
-    try {
-      const status = await this._ctx.execute("agent", "status", {});
-      await this.send_direct_message(chat_id, `Agent status:\n${JSON.stringify(status, null, 2)}`);
-      return;
-    } catch {
-      const fallback = this.status_impl();
-      await this.send_direct_message(chat_id, `Agent status unavailable. Telegram status:\n${JSON.stringify(fallback, null, 2)}`);
-    }
-  }
-
-  private async reply_admin_customers(chat_id: string, limit: number): Promise<void> {
-    try {
-      const out = await this._ctx.execute("conv", "list_threads", { limit });
-      const threads = Array.isArray((out as any)?.threads) ? ((out as any).threads as Array<Record<string, unknown>>) : undefined;
-      if (!threads) {
-        await this.send_direct_message(chat_id, "customers not_available");
-        return;
-      }
-
-      if (threads.length === 0) {
-        await this.send_direct_message(chat_id, "No customer threads yet.");
-        return;
-      }
-
-      const lines = threads.slice(0, limit).map((thread) => {
-        const thread_id = typeof thread.thread_id === "string" ? thread.thread_id : "n/a";
-        const channel = typeof thread.channel === "string" ? thread.channel : "n/a";
-        const channel_thread_id = typeof thread.channel_thread_id === "string" ? thread.channel_thread_id : "n/a";
-        return `${thread_id} | ${channel}:${channel_thread_id}`;
-      });
-
-      await this.send_direct_message(chat_id, [`Threads (${lines.length}):`, ...lines].join("\n"));
-    } catch {
-      await this.send_direct_message(chat_id, "customers not_available");
-    }
-  }
-
-  private async reply_admin_say(chat_id: string, args: string[]): Promise<void> {
-    const target_chat_id = args[0];
-    const text = args.slice(1).join(" ").trim();
-
-    if (!target_chat_id || !text) {
-      await this.send_direct_message(chat_id, "Usage: /say <chat_id> <text>");
-      return;
-    }
-
-    try {
-      await this._ctx.execute("channels", "send_message", {
-        channel: "telegram",
-        channel_thread_id: target_chat_id,
-        text
-      });
-      await this.send_direct_message(chat_id, `Sent to ${target_chat_id} via channels.send_message`);
-      return;
-    } catch (err) {
-      this._ctx.log("warn", "channels.send_message failed for /say, using direct telegram send", {
-        target_chat_id,
-        error: format_error(err)
-      });
-    }
-
-    await this.send_direct_message(target_chat_id, text);
-    await this.send_direct_message(chat_id, `Sent to ${target_chat_id} via telegram.send (outbound storage skipped)`);
-  }
-
   private async handle_customer_message(inbound: NormalizedTelegramInbound, source: "polling" | "webhook"): Promise<void> {
-    if (is_start_command(inbound.text)) {
-      await this.send_direct_message(
-        inbound.chat_id,
-        "Welcome to XBot Alpha. Send any message and we will route it to the agent."
-      );
-      return;
-    }
-
     const profile_name = [inbound.profile.first_name, inbound.profile.last_name]
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
       .join(" ")
       .trim();
 
-    const routed = await this._ctx.execute("channels", "route_inbound_message", {
-      channel_id: "telegram",
-      thread_key: inbound.chat_id,
-      user_ref: {
-        provider: "telegram",
-        id: inbound.from_id,
-        ...(inbound.profile.username ? { username: inbound.profile.username } : {}),
-        ...(profile_name ? { name: profile_name } : {})
-      },
-      msg: {
-        text: inbound.text,
-        external_id: inbound.message_id,
+    await this._ctx.execute("channels", "route_inbound_message", {
+      _channel: "telegram",
+      _channel_user_id: inbound.from_id,
+      _thread_key: inbound.chat_id,
+      _text: inbound.text,
+      _external_id: inbound.message_id,
+      _meta: {
+        source,
+        profile: {
+          ...(inbound.profile.username ? { username: inbound.profile.username } : {}),
+          ...(profile_name ? { display_name: profile_name, name: profile_name } : {})
+        },
         raw: {
-          ...inbound.raw,
-          source
+          ...inbound.raw
         }
       }
     });
-
-    const thread_id =
-      is_plain_object(routed) && typeof routed.thread_id === "string" && routed.thread_id.trim().length > 0
-        ? routed.thread_id.trim()
-        : "";
-    if (!thread_id) {
-      throw new XError("E_TG_UPSTREAM", "channels.route_inbound_message did not return thread_id");
-    }
-
-    await this._ctx.execute("agent", "handle_inbound", {
-      channel_id: "telegram",
-      thread_id,
-      text: inbound.text,
-      user_ref: {
-        provider: "telegram",
-        id: inbound.from_id,
-        ...(inbound.profile.username ? { username: inbound.profile.username } : {}),
-        ...(profile_name ? { name: profile_name } : {})
-      }
-    });
-  }
-
-  private async send_direct_message(chat_id: string, text: string, parse_mode?: TelegramParseMode): Promise<void> {
-    await telegram_send_message({
-      bot_token: this.require_bot_token(),
-      chat_id,
-      text,
-      ...(parse_mode ? { parse_mode } : {})
-    });
-  }
-
-  private parse_limit(raw: string | undefined, fallback: number, max: number): number {
-    if (!raw) return fallback;
-    const parsed = Number.parseInt(raw, 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-    return Math.min(parsed, max);
   }
 
   private require_bot_token(): string {
@@ -828,6 +660,22 @@ export class TelegramConnectorModule extends XModule {
     const result = is_plain_object(out) && is_plain_object(out.result) ? out.result : {};
     const settings = Object.prototype.hasOwnProperty.call(result, "settings") ? result.settings : TELEGRAM_SETTINGS_DEFAULTS;
     return normalize_telegram_skill_settings(settings);
+  }
+
+  private async restore_last_update_id_from_state(): Promise<void> {
+    const value = await this._ctx.state_get("telegram.last_update_id");
+    if (typeof value === "number" && Number.isFinite(value)) {
+      this._last_update_id = Math.trunc(value);
+      return;
+    }
+    if (is_plain_object(value) && typeof value.last_update_id === "number" && Number.isFinite(value.last_update_id)) {
+      this._last_update_id = Math.trunc(value.last_update_id);
+    }
+  }
+
+  private async persist_last_update_id(): Promise<void> {
+    if (typeof this._last_update_id !== "number" || !Number.isFinite(this._last_update_id)) return;
+    await this._ctx.state_set("telegram.last_update_id", Math.trunc(this._last_update_id));
   }
 }
 

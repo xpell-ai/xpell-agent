@@ -1,0 +1,191 @@
+{
+  "_id": "view-intents",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Intents"
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "intents-refresh-btn",
+          "class": "acp-primary-btn",
+          "_text": "Refresh",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "intents_refresh"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.intents.status_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "view",
+      "class": "acp-table-scroll",
+      "_children": [
+        {
+          "_type": "table",
+          "_id": "intents-table",
+          "_data_source": "acp.ui.intents.table_rows",
+          "_columns": [
+            {
+              "key": "enabled",
+              "label": "Enabled",
+              "width": "90px"
+            },
+            {
+              "key": "intent_id",
+              "label": "Intent ID",
+              "width": "240px"
+            },
+            {
+              "key": "title",
+              "label": "Title",
+              "width": "180px"
+            },
+            {
+              "key": "roles_text",
+              "label": "Roles",
+              "width": "140px"
+            },
+            {
+              "key": "channels_text",
+              "label": "Channels",
+              "width": "140px"
+            },
+            {
+              "key": "priority",
+              "label": "Priority",
+              "width": "90px"
+            },
+            {
+              "key": "skill_id",
+              "label": "Source",
+              "width": "220px"
+            },
+            {
+              "key": "action",
+              "label": "Actions",
+              "width": "100px"
+            }
+          ],
+          "_dense": true,
+          "_striped": true,
+          "_bordered": true,
+          "_hover": false,
+          "_empty_text": "No intents"
+        }
+      ]
+    },
+    {
+      "_type": "input",
+      "_id": "intents-action-intent-id-input",
+      "style": "display:none"
+    },
+    {
+      "_type": "button",
+      "_id": "intents-edit-btn",
+      "style": "display:none",
+      "_text": "Edit",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "intents_edit"
+        }
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-form-title",
+      "_text": "Intent Details"
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.intents.selected_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-panel",
+      "_data_source": "acp.ui.intents.form_summary_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "select",
+      "_id": "intents-enabled-select",
+      "class": "acp-input",
+      "_options": [
+        { "value": "true", "label": "Enabled" },
+        { "value": "false", "label": "Disabled" }
+      ]
+    },
+    {
+      "_type": "input",
+      "_id": "intents-priority-input",
+      "class": "acp-input",
+      "placeholder": "Priority (number)"
+    },
+    {
+      "_type": "textarea",
+      "_id": "intents-roles-input",
+      "class": "acp-input acp-textarea",
+      "placeholder": "Roles (comma or newline: admin, customer)"
+    },
+    {
+      "_type": "textarea",
+      "_id": "intents-channels-input",
+      "class": "acp-input acp-textarea",
+      "placeholder": "Channels (comma or newline: telegram)"
+    },
+    {
+      "_type": "textarea",
+      "_id": "intents-synonyms-input",
+      "class": "acp-input acp-textarea",
+      "placeholder": "Synonyms (comma or newline)"
+    },
+    {
+      "_type": "textarea",
+      "_id": "intents-examples-input",
+      "class": "acp-input acp-textarea",
+      "placeholder": "Examples (comma or newline)"
+    },
+    {
+      "_type": "textarea",
+      "_id": "intents-default-params-input",
+      "class": "acp-input acp-textarea",
+      "placeholder": "Default params JSON"
+    },
+    {
+      "_type": "button",
+      "_id": "intents-save-btn",
+      "class": "acp-primary-btn",
+      "_text": "Save",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "intents_save"
+        }
+      }
+    }
+  ]
+}

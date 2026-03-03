@@ -1,0 +1,13 @@
+{
+  "agent": {
+    "agent_id": "xbot"
+  },
+  "skills": {
+    "allow": [],
+    "enabled": [],
+    "resolve": {
+      "node_modules": true,
+      "local_paths": []
+    }
+  }
+}

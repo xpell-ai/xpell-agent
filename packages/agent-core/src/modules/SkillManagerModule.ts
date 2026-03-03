@@ -6,6 +6,15 @@ import { pathToFileURL } from "node:url";
 import { XError, XModule, _x, _xem, _xlog, type XCommandData } from "@xpell/node";
 
 import { SETTINGS_MODULE_NAME } from "./SettingsModule.js";
+import {
+  build_skill_state_ukey,
+  get_skill_state_xdb,
+  init_skill_state_xdb,
+  list_skill_state_xdb,
+  upsert_skill_state_xdb,
+  type AgentSkillStateXdbScope,
+  type PersistedSkillStateRecord
+} from "./skill-state-xdb.js";
 import { readCommandCtx, requireKernelCap, requireKernelCapOrActorRole } from "../runtime/guards.js";
 import type { SkillSettingsMeta, XSettingsSchema, XSettingsSchemaFieldType } from "../types/settings.js";
 import type {
@@ -14,6 +23,9 @@ import type {
   SkillConfig,
   SkillLogLevel,
   SkillRegisterFn,
+  XBotIntent,
+  XBotSkillAction,
+  XBotSkillActionField,
   XBotSkill,
   XBotSkillCapability,
   XBotSkillContext
@@ -25,6 +37,7 @@ type Dict = Record<string, unknown>;
 
 type SkillManagerOptions = {
   agent_id: string;
+  agent_env: string;
   version: string;
   config_path: string;
   repo_root: string;
@@ -114,6 +127,21 @@ function is_valid_settings_field_type(value: unknown): value is XSettingsSchemaF
   return value === "string" || value === "number" || value === "boolean" || value === "select" || value === "string_list";
 }
 
+function is_valid_action_field_type(value: unknown): value is XBotSkillActionField["type"] {
+  return value === "string" || value === "number" || value === "boolean" || value === "select";
+}
+
+function is_valid_intent_field_type(value: unknown): value is "string" | "number" | "boolean" | "select" | "string_list" | "json" {
+  return (
+    value === "string" ||
+    value === "number" ||
+    value === "boolean" ||
+    value === "select" ||
+    value === "string_list" ||
+    value === "json"
+  );
+}
+
 function to_error_message(err: unknown): string {
   if (err && typeof err === "object" && typeof (err as any).toXData === "function") {
     const data = (err as any).toXData();
@@ -146,11 +174,16 @@ function clone_loaded_record(record: LoadedSkillRecord): LoadedSkillRecord {
   return {
     id: record.id,
     ...(record.version ? { version: record.version } : {}),
+    ...(record.name ? { name: record.name } : {}),
+    ...(record.description ? { description: record.description } : {}),
     enabled: record.enabled,
     status: record.status,
     ...(record.error ? { error: record.error } : {}),
+    ...(record.settings_meta ? { settings_meta: clone_json(record.settings_meta) } : {}),
     ...(record.source ? { source: record.source } : {}),
     ...(record.capabilities ? { capabilities: clone_capabilities(record.capabilities) } : {}),
+    ...(record.actions ? { actions: clone_json(record.actions) } : {}),
+    ...(record.intents ? { intents: clone_json(record.intents) } : {}),
     ...(record.modules_registered ? { modules_registered: [...record.modules_registered] } : {})
   };
 }
@@ -177,6 +210,7 @@ export class SkillManagerModule extends XModule {
   private _repo_root: string;
   private _package_root: string;
   private _kernel_cap: string;
+  private _state_scope: AgentSkillStateXdbScope;
 
   private _config: AgentConfig = DEFAULT_AGENT_CONFIG;
   private _enabled = new Set<string>();
@@ -187,6 +221,8 @@ export class SkillManagerModule extends XModule {
   private _module_to_skill = new Map<string, string>();
   private _runtime_by_skill = new Map<string, SkillRuntimeRecord>();
   private _settings_meta_by_skill = new Map<string, SkillSettingsMeta>();
+  private _skill_intents_by_skill = new Map<string, XBotIntent[]>();
+  private _state_by_ukey = new Map<string, PersistedSkillStateRecord>();
 
   constructor(opts: SkillManagerOptions) {
     super({ _name: SKILL_MANAGER_MODULE_NAME });
@@ -196,6 +232,10 @@ export class SkillManagerModule extends XModule {
     this._repo_root = path.resolve(opts.repo_root);
     this._package_root = path.resolve(opts.package_root);
     this._kernel_cap = opts.kernel_cap;
+    this._state_scope = {
+      _app_id: opts.agent_id,
+      _env: opts.agent_env
+    };
   }
 
   async _list(_xcmd: XCommandData) {
@@ -226,6 +266,27 @@ export class SkillManagerModule extends XModule {
     return this._reload_enabled(xcmd);
   }
 
+  async _init_on_boot(xcmd: XCommandData) {
+    return this.init_on_boot_impl(xcmd);
+  }
+  async _op_init_on_boot(xcmd: XCommandData) {
+    return this.init_on_boot_impl(xcmd);
+  }
+
+  async _state_get(xcmd: XCommandData) {
+    return this.state_get_impl(xcmd);
+  }
+  async _op_state_get(xcmd: XCommandData) {
+    return this.state_get_impl(xcmd);
+  }
+
+  async _state_set(xcmd: XCommandData) {
+    return this.state_set_impl(xcmd);
+  }
+  async _op_state_set(xcmd: XCommandData) {
+    return this.state_set_impl(xcmd);
+  }
+
   async _get_settings(xcmd: XCommandData) {
     return this.get_settings_impl(xcmd);
   }
@@ -238,6 +299,13 @@ export class SkillManagerModule extends XModule {
   }
   async _op_update_settings(xcmd: XCommandData) {
     return this._update_settings(xcmd);
+  }
+
+  async _list_intents(xcmd: XCommandData) {
+    return this.list_intents_impl(xcmd);
+  }
+  async _op_list_intents(xcmd: XCommandData) {
+    return this.list_intents_impl(xcmd);
   }
 
   assert_module_command_allowed(module_name: string): void {
@@ -253,11 +321,47 @@ export class SkillManagerModule extends XModule {
     return clone_json(current);
   }
 
+  resolve_intents(): Array<XBotIntent & { skill_id: string }> {
+    const items: Array<XBotIntent & { skill_id: string }> = [];
+    for (const skill_id of this.sorted_enabled()) {
+      const intents = this._skill_intents_by_skill.get(skill_id) ?? [];
+      for (const intent of intents) {
+        items.push({
+          ...clone_json(intent),
+          skill_id
+        });
+      }
+    }
+    items.sort((left, right) => {
+      if (left.intent_id !== right.intent_id) return left.intent_id.localeCompare(right.intent_id);
+      return left.skill_id.localeCompare(right.skill_id);
+    });
+    return items;
+  }
+
   private list_impl() {
     return {
       allow: [...this._config.skills.allow],
       enabled: this.sorted_enabled(),
       loaded: this.to_loaded_list()
+    };
+  }
+
+  private list_intents_impl(xcmd: XCommandData) {
+    requireKernelCapOrActorRole(readCommandCtx(xcmd), "admin");
+    return {
+      items: this.resolve_intents()
+    };
+  }
+
+  private async init_on_boot_impl(xcmd: XCommandData) {
+    requireKernelCap(readCommandCtx(xcmd));
+    await this.ensure_agent_config_file();
+    await init_skill_state_xdb(this._state_scope);
+    await this.hydrate_skill_state_from_xdb();
+    return {
+      ok: true,
+      state_records: this._state_by_ukey.size
     };
   }
 
@@ -438,10 +542,15 @@ export class SkillManagerModule extends XModule {
       this._loaded.set(id, {
         id,
         version: runtime_record?.version,
+        name: existing?.name,
+        description: existing?.description,
         enabled: true,
         status: "loaded",
+        settings_meta: existing?.settings_meta ? clone_json(existing.settings_meta) : undefined,
         source: existing.source ?? runtime_record?.source,
         capabilities: clone_capabilities(runtime_record?.capabilities),
+        actions: existing?.actions ? clone_json(existing.actions) : undefined,
+        intents: existing?.intents ? clone_json(existing.intents) : undefined,
         modules_registered: [...modules].sort((a, b) => a.localeCompare(b))
       });
       _xlog.log(`[agent-core] skill enabled id=${id} source=${source}`);
@@ -474,17 +583,30 @@ export class SkillManagerModule extends XModule {
       this._loaded.set(id, {
         id,
         version: descriptor.version,
+        ...(descriptor.name ? { name: descriptor.name } : {}),
+        ...(descriptor.description ? { description: descriptor.description } : {}),
         enabled: true,
         status: "loaded",
+        ...(descriptor.settings_meta ? { settings_meta: clone_json(descriptor.settings_meta) } : {}),
         source: resolved.source,
         capabilities: clone_capabilities(descriptor.capabilities),
+        ...(descriptor.actions ? { actions: clone_json(descriptor.actions) } : {}),
+        ...(descriptor.intents ? { intents: clone_json(descriptor.intents) } : {}),
         modules_registered: modules
       });
+      this._skill_intents_by_skill.set(id, descriptor.intents ? clone_json(descriptor.intents) : []);
       _xlog.log(`[agent-core] skill loaded id=${id} source=${resolved.source}`);
     } catch (err) {
       this._enabled.delete(id);
-      this.set_error_state(id, to_error_message(err), resolved.source);
+      this.set_error_state(id, to_error_message(err), resolved.source, {
+        ...(descriptor.name ? { name: descriptor.name } : {}),
+        ...(descriptor.description ? { description: descriptor.description } : {}),
+        ...(descriptor.settings_meta ? { settings_meta: clone_json(descriptor.settings_meta) } : {}),
+        ...(descriptor.actions ? { actions: clone_json(descriptor.actions) } : {}),
+        ...(descriptor.intents ? { intents: clone_json(descriptor.intents) } : {})
+      });
       this._settings_meta_by_skill.delete(id);
+      this._skill_intents_by_skill.delete(id);
       throw err;
     } finally {
       this._activating.delete(id);
@@ -513,28 +635,55 @@ export class SkillManagerModule extends XModule {
     this._loaded.set(id, {
       id,
       version: runtime_record?.version ?? existing?.version,
+      name: existing?.name,
+      description: existing?.description,
       enabled: false,
       status: "disabled",
+      settings_meta: existing?.settings_meta ? clone_json(existing.settings_meta) : undefined,
       source: existing?.source ?? runtime_record?.source,
       capabilities: clone_capabilities(runtime_record?.capabilities ?? existing?.capabilities),
+      actions: existing?.actions ? clone_json(existing.actions) : undefined,
+      intents: existing?.intents ? clone_json(existing.intents) : undefined,
       modules_registered: modules
     });
 
     _xlog.log(`[agent-core] skill disabled id=${id} source=${source}`);
   }
 
-  private set_error_state(id: string, error_message: string, source?: string): void {
+  private set_error_state(
+    id: string,
+    error_message: string,
+    source?: string,
+    meta?: Pick<LoadedSkillRecord, "name" | "description" | "settings_meta" | "actions" | "intents">
+  ): void {
     const existing = this._loaded.get(id);
     const runtime_record = this._runtime_by_skill.get(id);
     const modules = Array.from(this._skill_to_modules.get(id) ?? []).sort((a, b) => a.localeCompare(b));
     this._loaded.set(id, {
       id,
       version: runtime_record?.version ?? existing?.version,
+      ...(meta?.name ? { name: meta.name } : existing?.name ? { name: existing.name } : {}),
+      ...(meta?.description ? { description: meta.description } : existing?.description ? { description: existing.description } : {}),
       enabled: false,
       status: "error",
       error: error_message,
+      ...(meta?.settings_meta
+        ? { settings_meta: clone_json(meta.settings_meta) }
+        : existing?.settings_meta
+          ? { settings_meta: clone_json(existing.settings_meta) }
+          : {}),
       source: source ?? existing?.source ?? runtime_record?.source,
       capabilities: clone_capabilities(runtime_record?.capabilities ?? existing?.capabilities),
+      ...(meta?.actions
+        ? { actions: clone_json(meta.actions) }
+        : existing?.actions
+          ? { actions: clone_json(existing.actions) }
+          : {}),
+      ...(meta?.intents
+        ? { intents: clone_json(meta.intents) }
+        : existing?.intents
+          ? { intents: clone_json(existing.intents) }
+          : {}),
       modules_registered: modules
     });
   }
@@ -548,8 +697,12 @@ export class SkillManagerModule extends XModule {
   private resolve_skill_descriptor(id: string, module_exports: unknown): {
     kind: "xbot" | "legacy";
     version: string;
+    name?: string;
+    description?: string;
     capabilities: XBotSkillCapability;
     settings_meta?: SkillSettingsMeta;
+    actions?: XBotSkillAction[];
+    intents?: XBotIntent[];
     on_enable: (ctx: XBotSkillContext) => Promise<void> | void;
     on_disable?: (ctx: XBotSkillContext) => Promise<void> | void;
   } {
@@ -563,8 +716,12 @@ export class SkillManagerModule extends XModule {
       return {
         kind: "xbot",
         version: skill.version,
+        ...(skill.name ? { name: skill.name } : {}),
+        ...(skill.description ? { description: skill.description } : {}),
         capabilities: normalize_capabilities(skill.capabilities),
         ...(skill.settings ? { settings_meta: this.normalize_skill_settings_meta(skill.settings, id) } : {}),
+        ...(skill.actions ? { actions: this.normalize_skill_actions(skill.actions, id) } : {}),
+        ...(skill.intents ? { intents: this.normalize_skill_intents(skill.intents, id) } : {}),
         on_enable: skill.onEnable.bind(skill),
         ...(typeof skill.onDisable === "function" ? { on_disable: skill.onDisable.bind(skill) } : {})
       };
@@ -598,6 +755,8 @@ export class SkillManagerModule extends XModule {
       ...(ensure_optional_string(value.name) ? { name: ensure_optional_string(value.name) } : {}),
       ...(ensure_optional_string(value.description) ? { description: ensure_optional_string(value.description) } : {}),
       ...(value.settings !== undefined ? { settings: value.settings as SkillSettingsMeta } : {}),
+      ...(value.actions !== undefined ? { actions: value.actions as XBotSkillAction[] } : {}),
+      ...(value.intents !== undefined ? { intents: value.intents as XBotIntent[] } : {}),
       capabilities: normalize_capabilities(value.capabilities),
       onEnable: on_enable as XBotSkill["onEnable"],
       ...(typeof value.onDisable === "function" ? { onDisable: value.onDisable as XBotSkill["onDisable"] } : {})
@@ -697,6 +856,47 @@ export class SkillManagerModule extends XModule {
           }
         });
       },
+      state_get: async (key) => {
+        this.assert_skill_enabled_for_callback(skill_id);
+        const state_key = ensure_non_empty_string(key, "key");
+        const out = await _x.execute({
+          _module: SKILL_MANAGER_MODULE_NAME,
+          _op: "state_get",
+          _params: {
+            _skill_id: skill_id,
+            _key: state_key,
+            _ctx: {
+              kernel_cap: this._kernel_cap,
+              actor: {
+                role: "system",
+                source: `skill:${skill_id}`
+              }
+            }
+          }
+        });
+        if (!is_plain_object(out) || out.found !== true) return undefined;
+        return this.unpack_skill_state_value(out._value);
+      },
+      state_set: async (key, value) => {
+        this.assert_skill_enabled_for_callback(skill_id);
+        const state_key = ensure_non_empty_string(key, "key");
+        await _x.execute({
+          _module: SKILL_MANAGER_MODULE_NAME,
+          _op: "state_set",
+          _params: {
+            _skill_id: skill_id,
+            _key: state_key,
+            _value: this.pack_skill_state_value(value),
+            _ctx: {
+              kernel_cap: this._kernel_cap,
+              actor: {
+                role: "system",
+                source: `skill:${skill_id}`
+              }
+            }
+          }
+        });
+      },
       emit: (event_name, payload) => {
         this.assert_skill_enabled_for_callback(skill_id);
         const name = ensure_non_empty_string(event_name, "eventName");
@@ -751,6 +951,81 @@ export class SkillManagerModule extends XModule {
     return { ...value };
   }
 
+  private async state_get_impl(xcmd: XCommandData) {
+    requireKernelCap(readCommandCtx(xcmd));
+    const params = this.ensure_json_object(xcmd._params ?? {}, "params");
+    const skill_id = ensure_non_empty_string(params._skill_id, "_skill_id");
+    const key = ensure_non_empty_string(params._key, "_key");
+    const ukey = build_skill_state_ukey(skill_id, key);
+    const record = this._state_by_ukey.get(ukey) ?? (await get_skill_state_xdb(this._state_scope, ukey));
+    if (!record) {
+      return { found: false };
+    }
+    this._state_by_ukey.set(ukey, {
+      ...record,
+      _value: { ...record._value }
+    });
+    return {
+      found: true,
+      _value: { ...record._value }
+    };
+  }
+
+  private async state_set_impl(xcmd: XCommandData) {
+    requireKernelCap(readCommandCtx(xcmd));
+    const params = this.ensure_json_object(xcmd._params ?? {}, "params");
+    const skill_id = ensure_non_empty_string(params._skill_id, "_skill_id");
+    const key = ensure_non_empty_string(params._key, "_key");
+    const value = this.ensure_json_object(params._value, "_value");
+    const ukey = build_skill_state_ukey(skill_id, key);
+    const existing = this._state_by_ukey.get(ukey) ?? (await get_skill_state_xdb(this._state_scope, ukey));
+    const now = Date.now();
+    const record: PersistedSkillStateRecord = {
+      _ukey: ukey,
+      _skill_id: skill_id,
+      _key: key,
+      _value: { ...value },
+      _created_at: existing?._created_at ?? now,
+      _updated_at: now
+    };
+    await upsert_skill_state_xdb(this._state_scope, record);
+    this._state_by_ukey.set(ukey, {
+      ...record,
+      _value: { ...record._value }
+    });
+    return { ok: true };
+  }
+
+  private async hydrate_skill_state_from_xdb(): Promise<void> {
+    const rows = await list_skill_state_xdb(this._state_scope);
+    this._state_by_ukey.clear();
+    for (const row of rows) {
+      this._state_by_ukey.set(row._ukey, {
+        ...row,
+        _value: { ...row._value }
+      });
+    }
+  }
+
+  private pack_skill_state_value(value: unknown): Record<string, unknown> {
+    if (value === undefined) return { _primitive: null };
+    if (is_plain_object(value)) return { ...value };
+    if (Array.isArray(value)) return { _primitive: clone_json(value) as any };
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+      return { _primitive: value as any };
+    }
+    throw new XError("E_SKILLS_BAD_PARAMS", "state value must be JSON-safe");
+  }
+
+  private unpack_skill_state_value(value: unknown): unknown {
+    if (!is_plain_object(value)) return undefined;
+    const keys = Object.keys(value);
+    if (keys.length === 1 && keys[0] === "_primitive") {
+      return (value as Dict)._primitive;
+    }
+    return clone_json(value);
+  }
+
   private normalize_skill_settings_meta(value: SkillSettingsMeta, skill_id: string): SkillSettingsMeta {
     const out: SkillSettingsMeta = {};
 
@@ -770,6 +1045,232 @@ export class SkillManagerModule extends XModule {
     }
 
     return out;
+  }
+
+  private normalize_skill_actions(value: XBotSkillAction[], skill_id: string): XBotSkillAction[] {
+    if (!Array.isArray(value)) {
+      throw new XError("E_SKILLS_BAD_EXPORT", `skill.actions must be an array: ${skill_id}`);
+    }
+
+    return value.map((action, idx) => {
+      if (!is_plain_object(action)) {
+        throw new XError("E_SKILLS_BAD_EXPORT", `skill.actions[${idx}] must be an object: ${skill_id}`);
+      }
+
+      const id = ensure_non_empty_string(action.id, `skill.actions[${idx}].id`);
+      const label = ensure_non_empty_string(action.label, `skill.actions[${idx}].label`);
+      const kind =
+        action.kind === "primary" || action.kind === "secondary" || action.kind === "danger" ? action.kind : undefined;
+
+      if (!is_plain_object(action.op)) {
+        throw new XError("E_SKILLS_BAD_EXPORT", `skill.actions[${idx}].op must be an object: ${skill_id}`);
+      }
+
+      const op = {
+        module: ensure_non_empty_string(action.op.module, `skill.actions[${idx}].op.module`),
+        op: ensure_non_empty_string(action.op.op, `skill.actions[${idx}].op.op`)
+      };
+
+      const params_schema =
+        action.params_schema !== undefined
+          ? this.normalize_skill_action_params_schema(action.params_schema, skill_id, idx)
+          : undefined;
+
+      let confirm: XBotSkillAction["confirm"] | undefined;
+      if (action.confirm !== undefined) {
+        if (!is_plain_object(action.confirm)) {
+          throw new XError("E_SKILLS_BAD_EXPORT", `skill.actions[${idx}].confirm must be an object: ${skill_id}`);
+        }
+        confirm = {
+          title: ensure_non_empty_string(action.confirm.title, `skill.actions[${idx}].confirm.title`),
+          body: ensure_non_empty_string(action.confirm.body, `skill.actions[${idx}].confirm.body`)
+        };
+      }
+
+      return {
+        id,
+        label,
+        ...(kind ? { kind } : {}),
+        op,
+        ...(params_schema ? { params_schema } : {}),
+        ...(confirm ? { confirm } : {})
+      };
+    });
+  }
+
+  private normalize_skill_intents(value: XBotIntent[], skill_id: string): XBotIntent[] {
+    if (!Array.isArray(value)) {
+      throw new XError("E_SKILLS_BAD_EXPORT", `skill.intents must be an array: ${skill_id}`);
+    }
+
+    return value.map((intent, idx) => {
+      if (!is_plain_object(intent)) {
+        throw new XError("E_SKILLS_BAD_EXPORT", `skill.intents[${idx}] must be an object: ${skill_id}`);
+      }
+
+      const intent_id = ensure_non_empty_string(intent.intent_id, `skill.intents[${idx}].intent_id`);
+      const title = ensure_non_empty_string(intent.title, `skill.intents[${idx}].title`);
+      const description = ensure_optional_string(intent.description);
+      const roles_allowed = normalize_string_array(intent.roles_allowed).filter(
+        (role): role is "owner" | "admin" | "customer" => role === "owner" || role === "admin" || role === "customer"
+      );
+      if (roles_allowed.length === 0) {
+        throw new XError("E_SKILLS_BAD_EXPORT", `skill.intents[${idx}].roles_allowed must be non-empty: ${skill_id}`);
+      }
+
+      if (!is_plain_object(intent.handler)) {
+        throw new XError("E_SKILLS_BAD_EXPORT", `skill.intents[${idx}].handler must be an object: ${skill_id}`);
+      }
+
+      const handler = {
+        module: ensure_non_empty_string(intent.handler.module, `skill.intents[${idx}].handler.module`),
+        op: ensure_non_empty_string(intent.handler.op, `skill.intents[${idx}].handler.op`)
+      };
+
+      let params_schema: XBotIntent["params_schema"] | undefined;
+      if (intent.params_schema !== undefined) {
+        if (!is_plain_object(intent.params_schema) || !Array.isArray(intent.params_schema.fields)) {
+          throw new XError("E_SKILLS_BAD_EXPORT", `skill.intents[${idx}].params_schema must include fields[]: ${skill_id}`);
+        }
+        const fields = intent.params_schema.fields.map((field, field_idx) => {
+          if (!is_plain_object(field)) {
+            throw new XError(
+              "E_SKILLS_BAD_EXPORT",
+              `skill.intents[${idx}].params_schema.fields[${field_idx}] must be an object: ${skill_id}`
+            );
+          }
+          const key = ensure_non_empty_string(field.key, `skill.intents[${idx}].params_schema.fields[${field_idx}].key`);
+          const label = ensure_non_empty_string(
+            field.label,
+            `skill.intents[${idx}].params_schema.fields[${field_idx}].label`
+          );
+          if (!is_valid_intent_field_type(field.type)) {
+            throw new XError(
+              "E_SKILLS_BAD_EXPORT",
+              `Invalid skill.intents[${idx}].params_schema.fields[${field_idx}].type: ${skill_id}`
+            );
+          }
+          const options = Array.isArray(field.options)
+            ? field.options.map((option, option_idx) => {
+                if (!is_plain_object(option) || has_function(option.value)) {
+                  throw new XError(
+                    "E_SKILLS_BAD_EXPORT",
+                    `skill.intents[${idx}].params_schema.fields[${field_idx}].options[${option_idx}] must be JSON-safe: ${skill_id}`
+                  );
+                }
+                return {
+                  label: ensure_non_empty_string(
+                    option.label,
+                    `skill.intents[${idx}].params_schema.fields[${field_idx}].options[${option_idx}].label`
+                  ),
+                  value: clone_json(option.value)
+                };
+              })
+            : undefined;
+          return {
+            key,
+            label,
+            type: field.type,
+            ...(typeof field.help === "string" ? { help: field.help } : {}),
+            ...(typeof field.secret === "boolean" ? { secret: field.secret } : {}),
+            ...(options && options.length > 0 ? { options } : {}),
+            ...(typeof field.placeholder === "string" ? { placeholder: field.placeholder } : {})
+          };
+        });
+        params_schema = {
+          ...(typeof intent.params_schema.title === "string" ? { title: intent.params_schema.title } : {}),
+          fields
+        };
+      }
+
+      const channels_allowed = normalize_string_array(intent.channels_allowed);
+      const examples = normalize_string_array(intent.examples);
+      const synonyms = normalize_string_array(intent.synonyms);
+
+      return {
+        intent_id,
+        title,
+        ...(description ? { description } : {}),
+        roles_allowed,
+        ...(channels_allowed.length > 0 ? { channels_allowed } : {}),
+        handler,
+        ...(params_schema ? { params_schema } : {}),
+        ...(examples.length > 0 ? { examples } : {}),
+        ...(synonyms.length > 0 ? { synonyms } : {})
+      };
+    });
+  }
+
+  private normalize_skill_action_params_schema(
+    value: XBotSkillAction["params_schema"],
+    skill_id: string,
+    action_idx: number
+  ): XBotSkillAction["params_schema"] {
+    if (!is_plain_object(value) || !Array.isArray(value.fields)) {
+      throw new XError(
+        "E_SKILLS_BAD_EXPORT",
+        `skill.actions[${action_idx}].params_schema must include fields[]: ${skill_id}`
+      );
+    }
+
+    const fields = value.fields.map((field, field_idx) => {
+      if (!is_plain_object(field)) {
+        throw new XError(
+          "E_SKILLS_BAD_EXPORT",
+          `skill.actions[${action_idx}].params_schema.fields[${field_idx}] must be an object: ${skill_id}`
+        );
+      }
+
+      const key = ensure_non_empty_string(field.key, `skill.actions[${action_idx}].params_schema.fields[${field_idx}].key`);
+      const label = ensure_non_empty_string(
+        field.label,
+        `skill.actions[${action_idx}].params_schema.fields[${field_idx}].label`
+      );
+      if (!is_valid_action_field_type(field.type)) {
+        throw new XError(
+          "E_SKILLS_BAD_EXPORT",
+          `Invalid skill.actions[${action_idx}].params_schema.fields[${field_idx}].type: ${skill_id}`
+        );
+      }
+
+      const options = Array.isArray(field.options)
+        ? field.options.map((option, option_idx) => {
+            if (!is_plain_object(option)) {
+              throw new XError(
+                "E_SKILLS_BAD_EXPORT",
+                `skill.actions[${action_idx}].params_schema.fields[${field_idx}].options[${option_idx}] must be an object: ${skill_id}`
+              );
+            }
+            if (has_function(option.value)) {
+              throw new XError(
+                "E_SKILLS_BAD_EXPORT",
+                `skill.actions[${action_idx}].params_schema.fields[${field_idx}].options[${option_idx}].value must be JSON-safe: ${skill_id}`
+              );
+            }
+            return {
+              label: ensure_non_empty_string(
+                option.label,
+                `skill.actions[${action_idx}].params_schema.fields[${field_idx}].options[${option_idx}].label`
+              ),
+              value: clone_json(option.value)
+            };
+          })
+        : undefined;
+
+      return {
+        key,
+        label,
+        type: field.type,
+        ...(typeof field.help === "string" ? { help: field.help } : {}),
+        ...(options && options.length > 0 ? { options } : {}),
+        ...(typeof field.placeholder === "string" ? { placeholder: field.placeholder } : {})
+      };
+    });
+
+    return {
+      ...(typeof value.title === "string" ? { title: value.title } : {}),
+      fields
+    };
   }
 
   private normalize_settings_schema(value: XSettingsSchema, skill_id: string): XSettingsSchema {
@@ -962,17 +1463,16 @@ export class SkillManagerModule extends XModule {
     const enabled = this.sorted_enabled().filter((id) => this._config.skills.allow.includes(id));
     this._config.skills.enabled = [...enabled];
 
-    let parsed: Dict = {};
-    try {
-      const raw = await fs.readFile(this._config_path, "utf8");
-      const decoded = JSON.parse(raw);
-      if (is_plain_object(decoded)) parsed = { ...decoded };
-    } catch (err: any) {
-      if (err?.code !== "ENOENT") throw err;
-    }
+    const parsed = await this.read_existing_config_object();
 
     const existing_skills = is_plain_object(parsed.skills) ? { ...parsed.skills } : {};
     const existing_resolve = is_plain_object(existing_skills.resolve) ? { ...existing_skills.resolve } : {};
+    const existing_agent = is_plain_object(parsed.agent) ? { ...parsed.agent } : {};
+
+    parsed.agent = {
+      ...existing_agent,
+      agent_id: this._agent_id
+    };
 
     parsed.skills = {
       ...existing_skills,
@@ -986,6 +1486,44 @@ export class SkillManagerModule extends XModule {
     };
 
     await fs.writeFile(this._config_path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  }
+
+  private async ensure_agent_config_file(): Promise<void> {
+    const parsed = await this.read_existing_config_object();
+    const existing_agent = is_plain_object(parsed.agent) ? { ...parsed.agent } : {};
+    const existing_skills = is_plain_object(parsed.skills) ? { ...parsed.skills } : {};
+    const existing_resolve = is_plain_object(existing_skills.resolve) ? { ...existing_skills.resolve } : {};
+
+    parsed.agent = {
+      ...existing_agent,
+      agent_id: this._agent_id
+    };
+
+    parsed.skills = {
+      ...existing_skills,
+      allow: normalize_string_array(existing_skills.allow),
+      enabled: normalize_string_array(existing_skills.enabled),
+      resolve: {
+        node_modules: existing_resolve.node_modules === undefined ? true : existing_resolve.node_modules === true,
+        local_paths: normalize_string_array(existing_resolve.local_paths)
+      }
+    };
+
+    await fs.writeFile(this._config_path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  }
+
+  private async read_existing_config_object(): Promise<Dict> {
+    try {
+      const raw = await fs.readFile(this._config_path, "utf8");
+      const decoded = JSON.parse(raw);
+      if (!is_plain_object(decoded)) {
+        throw new XError("E_SKILLS_BAD_CONFIG", "agent.config.json must be an object");
+      }
+      return { ...decoded };
+    } catch (err: any) {
+      if (err?.code === "ENOENT") return {};
+      throw err;
+    }
   }
 
   private resolve_node_module(id: string): ResolvedSkillEntry {
@@ -1083,6 +1621,9 @@ export class SkillManagerModule extends XModule {
     } catch (err: any) {
       if (err?.code === "ENOENT") {
         return {
+          agent: {
+            agent_id: this._agent_id
+          },
           skills: {
             allow: [],
             enabled: [],
@@ -1110,6 +1651,9 @@ export class SkillManagerModule extends XModule {
     const local_paths = normalize_string_array(raw_resolve.local_paths);
 
     return {
+      agent: {
+        agent_id: this._agent_id
+      },
       skills: {
         allow,
         enabled,

@@ -1,8 +1,10 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 
-import { XError, XModule, _xlog, type XCommandData } from "@xpell/node";
+import { XError, XModule, _x, _xlog, type XCommandData } from "@xpell/node";
 
 import { readCommandCtx, requireKernelCap, requireKernelCapOrActorRole } from "../runtime/guards.js";
+import { CONVERSATIONS_MODULE_NAME } from "./ConversationsModule.js";
+import { SETTINGS_MODULE_NAME } from "./SettingsModule.js";
 import {
   delete_session_xdb,
   delete_user_xdb,
@@ -30,6 +32,7 @@ export const USERS_MODULE_NAME = "users";
 const USERS_DEFAULT_LIST_LIMIT = 50;
 const USERS_MAX_LIST_LIMIT = 500;
 const BOOTSTRAP_ADMIN_CHANNEL = "telegram";
+const USERS_ID_MIGRATION_FLAG = "migrations.users_id_v1_done";
 
 type Dict = Record<string, unknown>;
 
@@ -50,9 +53,21 @@ type SessionRecord = {
 
 type AdminView = {
   id: string;
+  display_id?: string;
   name: string;
   username: string;
   role: "admin" | "owner";
+};
+
+type UserSummary = {
+  _id: string;
+  _display_id?: string;
+  _display_name: string;
+  _role: BotUserRole;
+  _channels: string[];
+  _identities: BotIdentity[];
+  _created_at: number;
+  _updated_at: number;
 };
 
 type UsersModuleOptions = {
@@ -123,6 +138,7 @@ function clone_identity(identity: BotIdentity): BotIdentity {
 function clone_user(user: BotUser): BotUser {
   return {
     user_id: user.user_id,
+    ...(user.display_id ? { display_id: user.display_id } : {}),
     role: user.role,
     display_name: user.display_name,
     created_at: user.created_at,
@@ -155,10 +171,14 @@ function verify_password(password: string, digest: string): boolean {
   return timingSafeEqual(expected_buf, actual_buf);
 }
 
+function is_legacy_user_id(value: string | undefined): boolean {
+  if (typeof value !== "string") return false;
+  return /^user_\d+$/i.test(value.trim());
+}
+
 export class UsersModule extends XModule {
   static _name = USERS_MODULE_NAME;
 
-  private _user_seq = 0;
   private _identity_seq = 0;
   private _owner_user_id?: string;
 
@@ -202,6 +222,13 @@ export class UsersModule extends XModule {
     return this.resolve_identity_impl(xcmd);
   }
 
+  async _upsert_from_channel_identity(xcmd: XCommandData) {
+    return this.upsert_from_channel_identity_impl(xcmd);
+  }
+  async _op_upsert_from_channel_identity(xcmd: XCommandData) {
+    return this.upsert_from_channel_identity_impl(xcmd);
+  }
+
   async _list(xcmd: XCommandData) {
     return this.list_impl(xcmd);
   }
@@ -209,11 +236,25 @@ export class UsersModule extends XModule {
     return this.list_impl(xcmd);
   }
 
+  async _debug_identities(xcmd: XCommandData) {
+    return this.debug_identities_impl(xcmd);
+  }
+  async _op_debug_identities(xcmd: XCommandData) {
+    return this.debug_identities_impl(xcmd);
+  }
+
   async _init_on_boot(xcmd: XCommandData) {
     return this.init_on_boot_impl(xcmd);
   }
   async _op_init_on_boot(xcmd: XCommandData) {
     return this.init_on_boot_impl(xcmd);
+  }
+
+  async _reset_storage(xcmd: XCommandData) {
+    return this.reset_storage_impl(xcmd);
+  }
+  async _op_reset_storage(xcmd: XCommandData) {
+    return this.reset_storage_impl(xcmd);
   }
 
   async _login(xcmd: XCommandData) {
@@ -249,6 +290,13 @@ export class UsersModule extends XModule {
   }
   async _op_create_admin(xcmd: XCommandData) {
     return this.create_admin_impl(xcmd);
+  }
+
+  async _set_role(xcmd: XCommandData) {
+    return this.set_role_impl(xcmd);
+  }
+  async _op_set_role(xcmd: XCommandData) {
+    return this.set_role_impl(xcmd);
   }
 
   async _update_admin(xcmd: XCommandData) {
@@ -292,6 +340,7 @@ export class UsersModule extends XModule {
     await init_users_xdb(this._xdb_scope);
     await this.hydrate_from_xdb();
     this._xdb_initialized = true;
+    await this.run_users_id_migration_if_needed(readCommandCtx(xcmd));
     return {
       ok: true,
       users: this._users_by_id.size,
@@ -350,7 +399,54 @@ export class UsersModule extends XModule {
     const channel_user_id = normalize_channel_user_id(params.channel_user_id);
     const profile = this.ensure_optional_profile(params.profile);
 
-    const key = identity_key(channel, channel_user_id);
+    return this.upsert_channel_identity({
+      channel,
+      channel_user_id,
+      profile
+    });
+  }
+
+  private async upsert_from_channel_identity_impl(xcmd: XCommandData) {
+    const params = this.ensure_params(xcmd._params);
+    const channel =
+      ensure_optional_string(params.channel_id) ?? ensure_optional_string(params.channel);
+    if (!channel) {
+      throw new XError("E_USERS_BAD_PARAMS", "Invalid channel_id: expected non-empty string");
+    }
+    const external_user_id =
+      ensure_optional_string(params.external_user_id) ?? ensure_optional_string(params.channel_user_id);
+    if (!external_user_id) {
+      throw new XError("E_USERS_BAD_PARAMS", "Invalid external_user_id: expected non-empty string");
+    }
+
+    const external_username = ensure_optional_string(params.external_username) ?? ensure_optional_string(params.username);
+    const display_name = ensure_optional_string(params.display_name) ?? ensure_optional_string(params.name);
+    const meta = params.meta === undefined ? undefined : this.ensure_optional_profile(params.meta);
+    void meta;
+
+    const profile: Dict = {};
+    if (external_username) profile.username = external_username;
+    if (display_name) {
+      profile.display_name = display_name;
+      profile.name = display_name;
+    }
+
+    const out = await this.upsert_channel_identity({
+      channel: normalize_channel(channel),
+      channel_user_id: normalize_channel_user_id(external_user_id),
+      ...(Object.keys(profile).length > 0 ? { profile } : {})
+    });
+    return { user_id: out.user_id, role: out.role };
+  }
+
+  private async upsert_channel_identity(input: {
+    channel: string;
+    channel_user_id: string;
+    profile?: Dict;
+  }): Promise<{ user_id: string; role: BotUserRole }> {
+    const profile = input.profile;
+
+    const key = identity_key(input.channel, input.channel_user_id);
     const existing_user_id = this._identity_to_user_id.get(key);
     if (existing_user_id) {
       const existing_user = this.must_get_user(existing_user_id);
@@ -373,12 +469,12 @@ export class UsersModule extends XModule {
       return { user_id: existing_user.user_id, role: existing_user.role };
     }
 
-    const fallback_name = this.read_display_name_from_profile(profile) ?? `${channel}:${channel_user_id}`;
+    const fallback_name = this.read_display_name_from_profile(profile) ?? `${input.channel}:${input.channel_user_id}`;
     const customer = this.create_user(USER_ROLE_CUSTOMER, fallback_name);
     this.attach_identity({
       user_id: customer.user_id,
-      channel,
-      channel_user_id,
+      channel: input.channel,
+      channel_user_id: input.channel_user_id,
       display_name: this.read_display_name_from_profile(profile)
     });
 
@@ -387,22 +483,65 @@ export class UsersModule extends XModule {
     return { user_id: customer.user_id, role: customer.role };
   }
 
-  private list_impl(xcmd: XCommandData) {
+  private async list_impl(xcmd: XCommandData) {
+    this.assert_admin_or_owner_or_system(readCommandCtx(xcmd));
     const params = this.ensure_params(xcmd._params);
+    const filter = this.read_public_filter(params);
+    const role = filter._role ?? (params.role === undefined ? undefined : normalize_role(params.role));
+    const channel_filter = filter._channel;
+    const limit = this.normalize_limit(params._limit ?? params.limit, USERS_DEFAULT_LIST_LIMIT, USERS_MAX_LIST_LIMIT);
+    const cursor = this.normalize_cursor(params._cursor ?? params.cursor);
+    const q = ensure_optional_string(params._q ?? params.q)?.toLowerCase();
 
-    const role = params.role === undefined ? undefined : normalize_role(params.role);
-    const limit = this.normalize_limit(params.limit, USERS_DEFAULT_LIST_LIMIT, USERS_MAX_LIST_LIMIT);
-
-    const users = Array.from(this._users_by_id.values())
-      .filter((user) => (role ? user.role === role : true))
+    const users = (await list_users_xdb(this._xdb_scope))
+      .filter((user) => (role ? user._role === role : true))
+      .filter((user) => (channel_filter ? user._identities.some((identity) => identity.channel === channel_filter) : true))
+      .filter((user) => this.matches_persisted_user_query(user, q))
       .sort((left, right) => {
-        if (left.created_at !== right.created_at) return left.created_at - right.created_at;
-        return left.user_id.localeCompare(right.user_id);
-      })
-      .slice(0, limit)
-      .map(clone_user);
+        if (left._created_at !== right._created_at) return left._created_at - right._created_at;
+        return left._id.localeCompare(right._id);
+      });
 
-    return { users };
+    const items = users.slice(cursor, cursor + limit).map((user) => this.to_user_summary_from_persisted(user));
+    const next_cursor = cursor + limit < users.length ? String(cursor + limit) : undefined;
+
+    return {
+      items,
+      ...(next_cursor ? { next_cursor } : {})
+    };
+  }
+
+  private async debug_identities_impl(xcmd: XCommandData) {
+    this.assert_admin_or_owner_or_system(readCommandCtx(xcmd));
+    const params = this.ensure_params(xcmd._params);
+    const channel = params._channel === undefined ? "telegram" : normalize_channel(params._channel);
+    const out = await this.list_impl({
+      ...xcmd,
+      _params: {
+        _filter: { _channel: channel },
+        _limit: USERS_MAX_LIST_LIMIT,
+        _ctx: is_plain_object(xcmd._params) ? xcmd._params._ctx : undefined
+      }
+    });
+
+    if (!is_plain_object(out) || !Array.isArray(out.items)) {
+      throw new XError("E_USERS_UPSTREAM", "users.list returned invalid payload");
+    }
+
+    return out.items.map((entry) => {
+      const identities = entry._identities.map((identity) => ({
+        channel: ensure_non_empty_string(identity.channel, "identity.channel"),
+        channel_user_id: ensure_non_empty_string(identity.channel_user_id, "identity.channel_user_id"),
+        identity_id: ensure_non_empty_string(identity.identity_id, "identity.identity_id")
+      }));
+
+      return {
+        user_id: ensure_non_empty_string(entry._id, "_id"),
+        role: normalize_role(entry._role),
+        display_name: ensure_non_empty_string(entry._display_name, "_display_name"),
+        identities
+      };
+    });
   }
 
   private async login_impl(xcmd: XCommandData) {
@@ -470,6 +609,31 @@ export class UsersModule extends XModule {
     return { ok: true };
   }
 
+  private async reset_storage_impl(xcmd: XCommandData) {
+    requireKernelCapOrActorRole(readCommandCtx(xcmd), "admin");
+
+    const user_ids = await list_user_ids_xdb(this._xdb_scope);
+    const session_tokens = await list_session_tokens_xdb(this._xdb_scope);
+
+    try {
+      for (const token of session_tokens) {
+        await delete_session_xdb(this._xdb_scope, token);
+      }
+      for (const user_id of user_ids) {
+        await delete_user_xdb(this._xdb_scope, user_id);
+      }
+    } catch {
+      await this.hydrate_from_xdb();
+      throw new XError("E_USERS_PERSIST_FAILED", "Failed to reset users storage");
+    }
+
+    this.clear_runtime_state();
+    return {
+      users_deleted: user_ids.length,
+      sessions_deleted: session_tokens.length
+    };
+  }
+
   private list_admins_impl(xcmd: XCommandData) {
     this.require_admin_access(xcmd, { allow_when_empty: true });
 
@@ -502,11 +666,47 @@ export class UsersModule extends XModule {
     };
   }
 
+  private async set_role_impl(xcmd: XCommandData) {
+    const ctx = readCommandCtx(xcmd);
+    this.assert_admin_or_owner(ctx);
+
+    const params = this.ensure_params(xcmd._params);
+    const user_id = this.resolve_user_lookup_id(ensure_non_empty_string(params._user_id, "_user_id"));
+    const next_role = normalize_role(params._role);
+
+    if (next_role === USER_ROLE_OWNER && ctx.actor?.role !== USER_ROLE_OWNER) {
+      throw new XError("E_AGENT_FORBIDDEN", "Only owner can promote a user to owner");
+    }
+
+    const user = this.must_get_user(user_id);
+    if (user.role === next_role) {
+      return {
+        _ok: true,
+        _user_id: user.user_id,
+        _role: user.role
+      };
+    }
+
+    user.role = next_role;
+    user.updated_at = this.now();
+    if (next_role === USER_ROLE_OWNER) {
+      this._owner_user_id = user.user_id;
+    }
+
+    await this.persist_state_or_revert();
+
+    return {
+      _ok: true,
+      _user_id: user.user_id,
+      _role: user.role
+    };
+  }
+
   private async update_admin_impl(xcmd: XCommandData) {
     this.require_admin_access(xcmd, { allow_when_empty: false });
 
     const params = this.ensure_params(xcmd._params);
-    const user_id = ensure_non_empty_string(params.id, "id");
+    const user_id = this.resolve_user_lookup_id(ensure_non_empty_string(params.id, "id"));
 
     const user = this.must_get_user(user_id);
     const credential = this.must_get_admin_credential(user_id);
@@ -550,7 +750,7 @@ export class UsersModule extends XModule {
     this.require_admin_access(xcmd, { allow_when_empty: false });
 
     const params = this.ensure_params(xcmd._params);
-    const user_id = ensure_non_empty_string(params.id, "id");
+    const user_id = this.resolve_user_lookup_id(ensure_non_empty_string(params.id, "id"));
 
     const credential = this.must_get_admin_credential(user_id);
     const user = this.must_get_user(user_id);
@@ -598,6 +798,20 @@ export class UsersModule extends XModule {
     requireKernelCapOrActorRole(readCommandCtx(xcmd), "admin");
   }
 
+  private assert_admin_or_owner(ctx: ReturnType<typeof readCommandCtx>): void {
+    const role = typeof ctx.actor?.role === "string" ? ctx.actor.role : "";
+    if (role !== USER_ROLE_ADMIN && role !== USER_ROLE_OWNER) {
+      throw new XError("E_AGENT_FORBIDDEN", "Admin access required");
+    }
+  }
+
+  private assert_admin_or_owner_or_system(ctx: ReturnType<typeof readCommandCtx>): void {
+    const role = typeof ctx.actor?.role === "string" ? ctx.actor.role : "";
+    if (role !== USER_ROLE_ADMIN && role !== USER_ROLE_OWNER && role !== "system") {
+      throw new XError("E_AGENT_FORBIDDEN", "Admin access required");
+    }
+  }
+
   private read_admin_chat_ids(value: unknown): string[] {
     if (value === undefined || value === null) return [];
     if (!Array.isArray(value)) {
@@ -643,6 +857,67 @@ export class UsersModule extends XModule {
       throw new XError("E_USERS_BAD_PARAMS", "limit must be a positive integer");
     }
     return Math.min(parsed, max);
+  }
+
+  private normalize_cursor(value: unknown): number {
+    if (value === undefined || value === null) return 0;
+    const parsed = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      throw new XError("E_USERS_BAD_PARAMS", "cursor must be a non-negative integer");
+    }
+    return parsed;
+  }
+
+  private matches_user_query(user: BotUser, query: string | undefined): boolean {
+    if (!query) return true;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+
+    if (user.user_id.toLowerCase().includes(needle)) return true;
+    if (user.display_id && user.display_id.toLowerCase().includes(needle)) return true;
+    if (user.display_name.toLowerCase().includes(needle)) return true;
+    if (user.role.toLowerCase().includes(needle)) return true;
+
+    for (const identity of user.identities) {
+      if (identity.channel.toLowerCase().includes(needle)) return true;
+      if (identity.channel_user_id.toLowerCase().includes(needle)) return true;
+      if (identity.display_name && identity.display_name.toLowerCase().includes(needle)) return true;
+    }
+
+    return false;
+  }
+
+  private matches_persisted_user_query(user: PersistedUserRecord, query: string | undefined): boolean {
+    if (!query) return true;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+
+    if (user._id.toLowerCase().includes(needle)) return true;
+    if (user._display_id && user._display_id.toLowerCase().includes(needle)) return true;
+    if (user._display_name.toLowerCase().includes(needle)) return true;
+    if (user._role.toLowerCase().includes(needle)) return true;
+
+    for (const identity of user._identities) {
+      if (identity.channel.toLowerCase().includes(needle)) return true;
+      if (identity.channel_user_id.toLowerCase().includes(needle)) return true;
+      if (identity.display_name && identity.display_name.toLowerCase().includes(needle)) return true;
+    }
+
+    return false;
+  }
+
+  private read_public_filter(params: Dict): { _role?: BotUserRole; _channel?: string } {
+    const raw = params._filter;
+    if (raw === undefined || raw === null) return {};
+    if (!is_plain_object(raw) || has_function(raw)) {
+      throw new XError("E_USERS_BAD_PARAMS", "_filter must be a JSON-safe object");
+    }
+    const role = raw._role === undefined ? undefined : normalize_role(raw._role);
+    const channel = raw._channel === undefined ? undefined : normalize_channel(raw._channel);
+    return {
+      ...(role ? { _role: role } : {}),
+      ...(channel ? { _channel: channel } : {})
+    };
   }
 
   private add_admin_identity_raw(input: {
@@ -704,9 +979,8 @@ export class UsersModule extends XModule {
   }
 
   private create_user(role: BotUserRole, display_name: string): BotUser {
-    this._user_seq += 1;
     const now = this.now();
-    const user_id = `user_${this._user_seq.toString().padStart(6, "0")}`;
+    const user_id = randomUUID();
 
     const user: BotUser = {
       user_id,
@@ -794,6 +1068,7 @@ export class UsersModule extends XModule {
 
     return {
       id: user.user_id,
+      ...(user.display_id ? { display_id: user.display_id } : {}),
       name: user.display_name,
       username: credential.username,
       role
@@ -808,11 +1083,60 @@ export class UsersModule extends XModule {
     };
   }
 
-  private read_user_seq_from_id(user_id: string): number {
-    const matched = /^user_(\d+)$/.exec(user_id);
-    if (!matched) return 0;
-    const parsed = Number.parseInt(matched[1], 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  private resolve_user_lookup_id(value: string): string {
+    if (this._users_by_id.has(value)) return value;
+    const by_display = this.find_user_id_by_display_id(value);
+    if (by_display) return by_display;
+    throw new XError("E_USERS_NOT_FOUND", `User not found: ${value}`);
+  }
+
+  private find_user_id_by_display_id(display_id: string): string | undefined {
+    const needle = display_id.trim();
+    if (!needle) return undefined;
+    for (const user of this._users_by_id.values()) {
+      if (user.display_id === needle) return user.user_id;
+    }
+    return undefined;
+  }
+
+  private resolve_persisted_session_user_id(value: string): string | undefined {
+    if (this._users_by_id.has(value)) return value;
+    if (!is_legacy_user_id(value)) return undefined;
+    return this.find_user_id_by_display_id(value);
+  }
+
+  private to_user_summary(user: BotUser): UserSummary {
+    const channels = Array.from(new Set(user.identities.map((identity) => identity.channel))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+
+    return {
+      _id: user.user_id,
+      ...(user.display_id ? { _display_id: user.display_id } : {}),
+      _display_name: user.display_name,
+      _role: user.role,
+      _channels: channels,
+      _identities: user.identities.map(clone_identity),
+      _created_at: user.created_at,
+      _updated_at: user.updated_at
+    } as UserSummary;
+  }
+
+  private to_user_summary_from_persisted(user: PersistedUserRecord): UserSummary {
+    const channels = Array.from(new Set(user._identities.map((identity) => identity.channel))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+
+    return {
+      _id: user._id,
+      ...(user._display_id ? { _display_id: user._display_id } : {}),
+      _display_name: user._display_name,
+      _role: user._role,
+      _channels: channels,
+      _identities: user._identities.map(clone_identity),
+      _created_at: user._created_at,
+      _updated_at: user._updated_at
+    } as UserSummary;
   }
 
   private read_identity_seq_from_id(identity_id: string): number {
@@ -823,7 +1147,6 @@ export class UsersModule extends XModule {
   }
 
   private clear_runtime_state(): void {
-    this._user_seq = 0;
     this._identity_seq = 0;
     this._owner_user_id = undefined;
     this._users_by_id.clear();
@@ -840,12 +1163,12 @@ export class UsersModule extends XModule {
       _id: user.user_id,
       _app_id: this._xdb_scope._app_id,
       _env: this._xdb_scope._env,
-      _user_id: user.user_id,
       _role: user.role,
       _display_name: user.display_name,
       _identities: user.identities.map(clone_identity),
       _created_at: user.created_at,
       _updated_at: user.updated_at,
+      ...(user.display_id ? { _display_id: user.display_id } : {}),
       ...(credential ? { _username: credential.username } : {}),
       ...(credential ? { _password_digest: credential.password_digest } : {})
     };
@@ -870,13 +1193,19 @@ export class UsersModule extends XModule {
     this.clear_runtime_state();
 
     for (const row of persisted_users) {
+      const canonical_user_id = row._id;
       const role =
         row._role === USER_ROLE_OWNER || row._role === USER_ROLE_ADMIN || row._role === USER_ROLE_CUSTOMER
           ? row._role
           : USER_ROLE_CUSTOMER;
 
       const user: BotUser = {
-        user_id: row._user_id,
+        user_id: canonical_user_id,
+        ...(ensure_optional_string(row._display_id)
+          ? { display_id: ensure_optional_string(row._display_id) }
+          : ensure_optional_string(row._user_id)
+            ? { display_id: ensure_optional_string(row._user_id) }
+            : {}),
         role,
         display_name: row._display_name,
         created_at: row._created_at,
@@ -885,7 +1214,6 @@ export class UsersModule extends XModule {
       };
 
       this._users_by_id.set(user.user_id, user);
-      this._user_seq = Math.max(this._user_seq, this.read_user_seq_from_id(user.user_id));
 
       for (const identity of user.identities) {
         const key = identity_key(identity.channel, identity.channel_user_id);
@@ -915,10 +1243,11 @@ export class UsersModule extends XModule {
     }
 
     for (const row of persisted_sessions) {
-      if (!this._users_by_id.has(row._user_id)) continue;
+      const session_user_id = this.resolve_persisted_session_user_id(row._user_id);
+      if (!session_user_id) continue;
       this._sessions_by_token.set(row._token, {
         token: row._token,
-        user_id: row._user_id,
+        user_id: session_user_id,
         created_at: row._created_at,
         updated_at: row._updated_at
       });
@@ -931,7 +1260,7 @@ export class UsersModule extends XModule {
     const users = Array.from(this._users_by_id.values()).map((user) => this.to_persisted_user_record(user));
     const sessions = Array.from(this._sessions_by_token.values()).map((session) => this.to_persisted_session_record(session));
 
-    const keep_user_ids = new Set(users.map((user) => user._user_id));
+    const keep_user_ids = new Set(users.map((user) => user._id));
     const keep_session_tokens = new Set(sessions.map((session) => session._token));
 
     for (const user of users) {
@@ -966,9 +1295,66 @@ export class UsersModule extends XModule {
     }
   }
 
+  private async run_users_id_migration_if_needed(ctx: ReturnType<typeof readCommandCtx>): Promise<void> {
+    const done = await this.read_migration_flag(ctx);
+    if (done) return;
+    const legacy_to_canonical: Dict = {};
+    for (const user of this._users_by_id.values()) {
+      if (!user.display_id || user.display_id === user.user_id) continue;
+      legacy_to_canonical[user.display_id] = user.user_id;
+    }
+    if (Object.keys(legacy_to_canonical).length > 0) {
+      await _x.execute({
+        _module: CONVERSATIONS_MODULE_NAME,
+        _op: "remap_user_ids",
+        _params: {
+          map: legacy_to_canonical,
+          _ctx: this.forward_ctx(ctx)
+        }
+      });
+    }
+    await this.persist_state_or_revert();
+    await this.write_migration_flag(ctx);
+  }
+
+  private async read_migration_flag(ctx: ReturnType<typeof readCommandCtx>): Promise<boolean> {
+    const out = await _x.execute({
+      _module: SETTINGS_MODULE_NAME,
+      _op: "get",
+      _params: {
+        key: USERS_ID_MIGRATION_FLAG,
+        _ctx: this.forward_ctx(ctx)
+      }
+    });
+    return is_plain_object(out) && out.value === true;
+  }
+
+  private async write_migration_flag(ctx: ReturnType<typeof readCommandCtx>): Promise<void> {
+    await _x.execute({
+      _module: SETTINGS_MODULE_NAME,
+      _op: "set",
+      _params: {
+        key: USERS_ID_MIGRATION_FLAG,
+        value: true,
+        _ctx: this.forward_ctx(ctx)
+      }
+    });
+  }
+
   private get_owner_user(): BotUser | undefined {
     if (!this._owner_user_id) return undefined;
     return this._users_by_id.get(this._owner_user_id);
+  }
+
+  private forward_ctx(ctx: ReturnType<typeof readCommandCtx>): Dict {
+    const out: Dict = {};
+    if (typeof ctx.kernel_cap === "string" && ctx.kernel_cap.trim().length > 0) {
+      out.kernel_cap = ctx.kernel_cap;
+    }
+    if (ctx.actor && is_plain_object(ctx.actor)) {
+      out.actor = ctx.actor;
+    }
+    return out;
   }
 
   private must_get_user(user_id: string): BotUser {

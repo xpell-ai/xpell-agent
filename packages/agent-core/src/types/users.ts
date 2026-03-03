@@ -15,10 +15,10 @@ export type BotIdentity = {
 
 export type BotUser = {
   user_id: string;
+  display_id?: string;
   role: BotUserRole;
   display_name: string;
   created_at: number;
   updated_at: number;
   identities: BotIdentity[];
 };
-

@@ -1,0 +1,72 @@
+{
+  "_id": "view-setup-admin",
+  "_type": "view",
+  "class": "acp-page acp-login-page",
+  "_children": [
+    {
+      "_type": "view",
+      "class": "acp-card",
+      "_children": [
+        {
+          "_type": "label",
+          "class": "acp-title",
+          "_text": "Agent Control Panel"
+        },
+        {
+          "_type": "label",
+          "class": "acp-subtitle",
+          "_text": "Create First Admin"
+        },
+        {
+          "_type": "label",
+          "_id": "setup-admin-message-label",
+          "class": "acp-message",
+          "_data_source": "acp.ui.login_message",
+          "_on_data": {
+            "_op": "set-text-from-data"
+          }
+        },
+        {
+          "_type": "form",
+          "class": "acp-form",
+          "_children": [
+            {
+              "_type": "input",
+              "_id": "setup-admin-name-input",
+              "class": "acp-input",
+              "autocomplete": "name",
+              "placeholder": "Admin name"
+            },
+            {
+              "_type": "input",
+              "_id": "setup-admin-username-input",
+              "class": "acp-input",
+              "autocomplete": "username",
+              "placeholder": "Admin username"
+            },
+            {
+              "_type": "input",
+              "_id": "setup-admin-password-input",
+              "class": "acp-input",
+              "_input_type": "password",
+              "autocomplete": "new-password",
+              "placeholder": "Admin password"
+            }
+          ]
+        },
+        {
+          "_type": "button",
+          "_id": "setup-admin-submit-btn",
+          "class": "acp-primary-btn",
+          "_text": "Create Admin",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "setup_admin_create"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

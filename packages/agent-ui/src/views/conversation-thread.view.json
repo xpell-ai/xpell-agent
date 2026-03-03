@@ -1,0 +1,96 @@
+{
+  "_id": "view-conversation-thread",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "class": "acp-secondary-btn",
+          "_text": "Back",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "navigate",
+              "_route": "/conversations"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "conversation-detail-refresh-btn",
+          "class": "acp-primary-btn",
+          "_text": "Refresh",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "conversations_open"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Conversation Details"
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.conversation_detail.header_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.conversation_detail.status_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "view",
+      "class": "acp-table-scroll",
+      "_children": [
+        {
+          "_type": "table",
+          "_id": "conversation-detail-table",
+          "_data_source": "acp.ui.conversation_detail.table_rows",
+          "_columns": [
+            {
+              "key": "time_text",
+              "label": "Time",
+              "width": "180px"
+            },
+            {
+              "key": "direction",
+              "label": "Direction",
+              "width": "100px"
+            },
+            {
+              "key": "from",
+              "label": "From",
+              "width": "140px"
+            },
+            {
+              "key": "text",
+              "label": "Text",
+              "width": "420px"
+            }
+          ],
+          "_dense": true,
+          "_striped": true,
+          "_bordered": true,
+          "_hover": false,
+          "_empty_text": "No messages"
+        }
+      ]
+    }
+  ]
+}

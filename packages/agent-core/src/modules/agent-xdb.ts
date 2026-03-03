@@ -138,8 +138,7 @@ async function ensure_task_xdb(scope: AgentTaskXdbScope): Promise<AgentTaskXdb> 
         _env: { _type: "String", _required: true, _index: true },
         _task_id: { _type: "String", _required: true, _index: true },
         _task_type: { _type: "String", _required: true, _index: true },
-        _payload_json: { _type: "String" },
-        _created_at: { _type: "Number", _required: true, _index: true }
+        _payload_json: { _type: "String" }
       }
     }) as XDBEntity;
 
@@ -195,8 +194,7 @@ export async function add_task_xdb(scope: AgentTaskXdbScope, record: PersistedTa
     _env: scope._env,
     _task_id: record._task_id,
     _task_type: record._task_type,
-    _payload_json: to_json(record._payload),
-    _created_at: record._created_at
+    _payload_json: to_json(record._payload)
   };
   await xdb._tasks.add(row, true, true);
 }

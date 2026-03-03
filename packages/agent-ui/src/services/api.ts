@@ -16,12 +16,92 @@ export type ACPAdminUser = {
 
 export type ACPSkillStatus = "loaded" | "error" | "disabled";
 
+export type ACPSkillFieldType = "string" | "number" | "boolean" | "select" | "string_list";
+
+export type ACPSkillFieldOption = {
+  label: string;
+  value: unknown;
+};
+
+export type ACPSkillField = {
+  key: string;
+  label: string;
+  type: ACPSkillFieldType;
+  help?: string;
+  secret?: boolean;
+  options?: ACPSkillFieldOption[];
+  placeholder?: string;
+};
+
+export type ACPSkillSchema = {
+  title?: string;
+  fields: ACPSkillField[];
+};
+
+export type ACPSkillAction = {
+  id: string;
+  label: string;
+  kind?: "primary" | "danger" | "secondary";
+  op: {
+    module: string;
+    op: string;
+  };
+  params_schema?: {
+    fields: ACPSkillField[];
+  };
+  confirm?: {
+    title: string;
+    body: string;
+  };
+};
+
 export type ACPSkill = {
   id: string;
   version: string;
   enabled: boolean;
   status: ACPSkillStatus;
+  name?: string;
+  description?: string;
+  settings_meta?: {
+    schema?: ACPSkillSchema;
+    sensitive?: string[];
+  };
+  actions?: ACPSkillAction[];
   error?: string;
+};
+
+export type ACPSkillConfig = {
+  skill_id: string;
+  settings: Record<string, unknown>;
+  masked: Record<string, boolean>;
+  schema?: ACPSkillSchema;
+  actions: ACPSkillAction[];
+};
+
+export type ACPIntentRole = "admin" | "owner" | "customer";
+
+export type ACPIntentRecord = {
+  intent_id: string;
+  title: string;
+  description?: string;
+  skill_id: string;
+  enabled: boolean;
+  priority: number;
+  roles_allowed: ACPIntentRole[];
+  channels_allowed: string[];
+  synonyms: string[];
+  examples: string[];
+  default_params_json: string;
+};
+
+export type ACPIntentUpdateInput = {
+  intent_id: string;
+  priority?: number;
+  roles_allowed?: string[];
+  channels_allowed?: string[];
+  synonyms?: string[];
+  examples?: string[];
+  default_params_json?: string;
 };
 
 export type ACPSkillRuntimeStatus = {
@@ -86,6 +166,92 @@ export type ACPAgentProfile = {
 
 export type ACPAgentProfilePatch = Partial<ACPAgentIdentity>;
 
+export type ACPUserSummary = {
+  user_id: string;
+  display_id?: string;
+  display_name: string;
+  role: "admin" | "owner" | "customer";
+  channels: string[];
+  created_at: number;
+  updated_at: number;
+};
+
+export type ACPUsersListInput = {
+  q?: string;
+  limit?: number;
+  cursor?: string;
+};
+
+export type ACPUsersListResult = {
+  items: ACPUserSummary[];
+  next_cursor?: string;
+};
+
+export type ACPConversationSummary = {
+  thread_id: string;
+  channel: string;
+  channel_thread_id: string;
+  user_id: string;
+  status: string;
+  created_at: number;
+  updated_at: number;
+  tags: string[];
+};
+
+export type ACPConversationMessage = {
+  message_id: string;
+  thread_id: string;
+  direction: "in" | "out";
+  sender: string;
+  text: string;
+  ts: number;
+  channel_message_id?: string;
+};
+
+export type ACPQAgentTotals = {
+  cases_total: number;
+  cases_passed: number;
+  avg_score: number;
+  pass_rate: number;
+};
+
+export type ACPQAgentRun = {
+  run_id: string;
+  status: string;
+  created_at: number;
+  updated_at: number;
+  agent_name: string;
+  agent_role: string;
+  summary: string;
+  kb_files: string[];
+  totals: ACPQAgentTotals;
+};
+
+export type ACPQAgentCase = {
+  case_id: string;
+  case_idx: number;
+  audience: "admin" | "customer";
+  intent_id: string;
+  question: string;
+  expected_facts: string[];
+  answer: string;
+  score: number;
+  judge_notes: string;
+};
+
+export type ACPQAgentLastRun = {
+  run: ACPQAgentRun | null;
+  top_failures: ACPQAgentCase[];
+};
+
+export type ACPResetDbResult = {
+  ok: boolean;
+  threads_deleted: number;
+  messages_deleted: number;
+  users_deleted: number;
+  sessions_deleted: number;
+};
+
 export type ACPTelegramSkillSettings = {
   bot_token: string;
   admin_chat_ids: string[];
@@ -124,6 +290,7 @@ export type AuthSessionResponse = {
 };
 
 export interface AgentApi {
+  exec(module_name: string, op: string, params?: Record<string, unknown>): Promise<unknown>;
   auth: {
     login(identifier: string, password: string): Promise<ACPLoginResponse>;
     logout(token?: string): Promise<void>;
@@ -137,6 +304,7 @@ export interface AgentApi {
   };
   skills: {
     list(): Promise<ACPSkill[]>;
+    getConfig(skill_id: string): Promise<ACPSkillConfig>;
     enable(skill_id: string): Promise<ACPSkill>;
     disable(skill_id: string): Promise<ACPSkill>;
     getSettings(skill_id: string): Promise<Record<string, unknown>>;
@@ -148,15 +316,33 @@ export interface AgentApi {
     importEnv(skill_id: string): Promise<ACPSkillImportEnvResult>;
     testAzureConnection(skill_id: string): Promise<ACPAzureConnectionTestResult>;
   };
+  intents: {
+    list(): Promise<ACPIntentRecord[]>;
+    setEnabled(intent_id: string, enabled: boolean): Promise<void>;
+    updateConfig(input: ACPIntentUpdateInput): Promise<void>;
+  };
   system: {
     getAbout(): Promise<ACPAbout>;
     getServerUrl(): string;
     setServerUrl(next_url: string): string;
+    resetDb(): Promise<ACPResetDbResult>;
   };
   agent: {
     getProfile(): Promise<ACPAgentProfile>;
     setProfile(patch: ACPAgentProfilePatch): Promise<ACPAgentProfile>;
   };
+  conversations_list(limit?: number): Promise<ACPConversationSummary[]>;
+  conversations_get_thread(thread_id: string): Promise<ACPConversationSummary | null>;
+  conversations_list_messages(input: {
+    thread_id: string;
+    limit?: number;
+    before_ts?: number;
+  }): Promise<ACPConversationMessage[]>;
+  qagent_run_quick(max_cases?: number): Promise<ACPQAgentLastRun>;
+  qagent_get_last_run(): Promise<ACPQAgentLastRun>;
+  qagent_list_runs(limit?: number): Promise<ACPQAgentRun[]>;
+  qagent_get_run(run_id: string): Promise<{ run: ACPQAgentRun | null; cases: ACPQAgentCase[] }>;
+  users_list(input?: ACPUsersListInput): Promise<ACPUsersListResult>;
 }
 
 type ACPAdminRecord = ACPAdminUser & { password: string };
@@ -205,6 +391,20 @@ function is_plain_object(value: unknown): value is Record<string, unknown> {
 
 function as_text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalize_string_array(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const trimmed = entry.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
 }
 
 function normalize_language_policy(value: unknown): ACPAgentLanguagePolicy {
@@ -456,6 +656,13 @@ export class AgentApiError extends Error {
 function to_agent_profile(payload: unknown): ACPAgentProfile {
   const value = is_plain_object(payload) ? payload : {};
   const identity_obj = is_plain_object(value.identity) ? value.identity : {};
+  const name = as_text(value.name) || as_text(identity_obj.name);
+  const role = as_text(value.role) || as_text(identity_obj.role);
+  const system_prompt =
+    typeof value.system_prompt === "string"
+      ? value.system_prompt
+      : (typeof identity_obj.system_prompt === "string" ? identity_obj.system_prompt : "");
+  const language_policy = normalize_language_policy(value.language_policy ?? identity_obj.language_policy);
   return {
     agent_id: as_text(value.agent_id) || "unknown",
     env: as_text(value.env) || "default",
@@ -463,11 +670,374 @@ function to_agent_profile(payload: unknown): ACPAgentProfile {
     xpell_version: as_text(value.xpell_version) || "unknown",
     connected: value.connected !== false,
     identity: {
-      name: as_text(identity_obj.name),
-      role: as_text(identity_obj.role),
-      system_prompt: typeof identity_obj.system_prompt === "string" ? identity_obj.system_prompt : "",
-      language_policy: normalize_language_policy(identity_obj.language_policy)
+      name,
+      role,
+      system_prompt,
+      language_policy
     }
+  };
+}
+
+function to_user_summary(payload: unknown): ACPUserSummary | null {
+  const value = is_plain_object(payload) ? payload : {};
+  const user_id = as_text(value._id) || as_text(value.user_id);
+  if (!user_id) return null;
+  const role_raw = (as_text(value._role) || as_text(value.role)).toLowerCase();
+  const role: "admin" | "owner" | "customer" =
+    role_raw === "owner" ? "owner" : role_raw === "admin" ? "admin" : "customer";
+  const channels_value = Array.isArray(value._channels) ? value._channels : value.channels;
+  const channels = Array.isArray(channels_value)
+    ? channels_value.map((entry) => as_text(entry)).filter((entry) => entry.length > 0)
+    : [];
+  const created_at = Number(value._created_at ?? value.created_at);
+  const updated_at = Number(value._updated_at ?? value.updated_at);
+  const display_id = as_text(value._display_id) || as_text(value.display_id);
+  const display_name = as_text(value._display_name) || as_text(value.display_name) || as_text(value.name) || user_id;
+
+  return {
+    user_id,
+    ...(display_id ? { display_id } : {}),
+    display_name,
+    role,
+    channels,
+    created_at: Number.isFinite(created_at) ? Math.floor(created_at) : 0,
+    updated_at: Number.isFinite(updated_at) ? Math.floor(updated_at) : 0
+  };
+}
+
+function to_conversation_summary(payload: unknown): ACPConversationSummary | null {
+  const value = is_plain_object(payload) ? payload : {};
+  const thread_id = as_text(value.thread_id);
+  const channel = as_text(value.channel);
+  const channel_thread_id = as_text(value.channel_thread_id);
+  const user_id = as_text(value.user_id);
+  const status = as_text(value.status) || "open";
+  if (!thread_id || !channel || !channel_thread_id || !user_id) return null;
+
+  const created_at = Number(value.created_at);
+  const updated_at = Number(value.updated_at);
+  const tags = Array.isArray(value.tags) ? value.tags.map((entry) => as_text(entry)).filter((entry) => entry.length > 0) : [];
+
+  return {
+    thread_id,
+    channel,
+    channel_thread_id,
+    user_id,
+    status,
+    created_at: Number.isFinite(created_at) ? Math.floor(created_at) : 0,
+    updated_at: Number.isFinite(updated_at) ? Math.floor(updated_at) : 0,
+    tags
+  };
+}
+
+function to_conversation_message(payload: unknown): ACPConversationMessage | null {
+  const value = is_plain_object(payload) ? payload : {};
+  const message_id = as_text(value.message_id);
+  const thread_id = as_text(value.thread_id);
+  const direction = as_text(value.direction).toLowerCase();
+  const sender = as_text(value.sender) || "agent";
+  const text = typeof value.text === "string" ? value.text.trim() : "";
+  const ts = Number(value.ts);
+  const channel_message_id = as_text(value.channel_message_id);
+  if (!message_id || !thread_id || (direction !== "in" && direction !== "out")) return null;
+
+  return {
+    message_id,
+    thread_id,
+    direction: direction as "in" | "out",
+    sender,
+    text,
+    ts: Number.isFinite(ts) ? Math.floor(ts) : 0,
+    ...(channel_message_id ? { channel_message_id } : {})
+  };
+}
+
+function read_qagent_totals_from_string(value: unknown): ACPQAgentTotals {
+  if (typeof value !== "string" || !value.trim()) {
+    return {
+      cases_total: 0,
+      cases_passed: 0,
+      avg_score: 0,
+      pass_rate: 0
+    };
+  }
+  try {
+    return to_qagent_totals(JSON.parse(value));
+  } catch {
+    return {
+      cases_total: 0,
+      cases_passed: 0,
+      avg_score: 0,
+      pass_rate: 0
+    };
+  }
+}
+
+function to_qagent_totals(payload: unknown): ACPQAgentTotals {
+  const value = is_plain_object(payload) ? payload : {};
+  const cases_total = Number(value.cases_total);
+  const cases_passed = Number(value.cases_passed);
+  const avg_score = Number(value.avg_score);
+  const pass_rate = Number(value.pass_rate);
+  return {
+    cases_total: Number.isFinite(cases_total) ? Math.max(0, Math.floor(cases_total)) : 0,
+    cases_passed: Number.isFinite(cases_passed) ? Math.max(0, Math.floor(cases_passed)) : 0,
+    avg_score: Number.isFinite(avg_score) ? Math.min(1, Math.max(0, avg_score)) : 0,
+    pass_rate: Number.isFinite(pass_rate) ? Math.min(1, Math.max(0, pass_rate)) : 0
+  };
+}
+
+function to_qagent_run(payload: unknown, totals_override?: unknown): ACPQAgentRun | null {
+  const value = is_plain_object(payload) ? payload : {};
+  const run_id = as_text(value._id) || as_text(value.run_id);
+  if (!run_id) return null;
+
+  const kb_files_source = Array.isArray(value._kb_files) ? value._kb_files : value.kb_files;
+  const kb_files = Array.isArray(kb_files_source)
+    ? kb_files_source.map((entry) => as_text(entry)).filter((entry) => entry.length > 0)
+    : [];
+
+  const created_at = Number(value._created_at ?? value.created_at);
+  const updated_at = Number(value._updated_at ?? value.updated_at);
+  const totals = typeof totals_override !== "undefined"
+    ? to_qagent_totals(totals_override)
+    : read_qagent_totals_from_string(value._totals_json);
+
+  return {
+    run_id,
+    status: as_text(value._status) || as_text(value.status) || "created",
+    created_at: Number.isFinite(created_at) ? Math.floor(created_at) : 0,
+    updated_at: Number.isFinite(updated_at) ? Math.floor(updated_at) : 0,
+    agent_name: as_text(value._agent_name) || as_text(value.agent_name) || "XBot",
+    agent_role: as_text(value._agent_role) || as_text(value.agent_role) || "Assistant",
+    summary: as_text(value._summary) || as_text(value.summary),
+    kb_files,
+    totals
+  };
+}
+
+function to_qagent_case(payload: unknown): ACPQAgentCase | null {
+  const value = is_plain_object(payload) ? payload : {};
+  const case_id = as_text(value._id) || as_text(value.case_id);
+  if (!case_id) return null;
+
+  const expected_source = Array.isArray(value._expected_facts)
+    ? value._expected_facts
+    : (Array.isArray(value.expected_facts) ? value.expected_facts : undefined);
+  const expected_facts = Array.isArray(expected_source)
+    ? expected_source.map((entry) => as_text(entry)).filter((entry) => entry.length > 0)
+    : [];
+
+  const case_idx = Number(value._case_idx ?? value.case_idx);
+  const score = Number(value._score ?? value.score);
+  const audience = (as_text(value._audience) || as_text(value.audience)).toLowerCase() === "admin" ? "admin" : "customer";
+
+  return {
+    case_id,
+    case_idx: Number.isFinite(case_idx) ? Math.max(0, Math.floor(case_idx)) : 0,
+    audience,
+    intent_id: as_text(value._intent_id) || as_text(value.intent_id),
+    question: as_text(value._question) || as_text(value.question),
+    expected_facts,
+    answer: typeof value._answer === "string" ? value._answer : (typeof value.answer === "string" ? value.answer : ""),
+    score: Number.isFinite(score) ? Math.min(1, Math.max(0, score)) : 0,
+    judge_notes: typeof value._judge_notes === "string" ? value._judge_notes : (typeof value.judge_notes === "string" ? value.judge_notes : "")
+  };
+}
+
+function to_qagent_last_run(payload: unknown): ACPQAgentLastRun {
+  const value = is_plain_object(payload) ? payload : {};
+  const run = to_qagent_run(value.run, value.totals);
+  const top_failures_source = Array.isArray(value.top_failures) ? value.top_failures : [];
+  return {
+    run,
+    top_failures: top_failures_source.map((entry) => to_qagent_case(entry)).filter((entry): entry is ACPQAgentCase => entry !== null)
+  };
+}
+
+function is_skill_field_type(value: unknown): value is ACPSkillFieldType {
+  return value === "string" || value === "number" || value === "boolean" || value === "select" || value === "string_list";
+}
+
+function to_skill_field(value: unknown): ACPSkillField | null {
+  const entry = is_plain_object(value) ? value : {};
+  const key = as_text(entry.key);
+  const label = as_text(entry.label);
+  const type = entry.type;
+  if (!key || !label || !is_skill_field_type(type)) return null;
+
+  const options = Array.isArray(entry.options)
+    ? entry.options
+        .map((option) => {
+          const option_obj = is_plain_object(option) ? option : {};
+          const option_label = as_text(option_obj.label);
+          if (!option_label) return null;
+          return {
+            label: option_label,
+            value: deep_clone(option_obj.value)
+          } satisfies ACPSkillFieldOption;
+        })
+        .filter((option): option is ACPSkillFieldOption => option !== null)
+    : [];
+
+  return {
+    key,
+    label,
+    type,
+    ...(typeof entry.help === "string" ? { help: entry.help } : {}),
+    ...(typeof entry.secret === "boolean" ? { secret: entry.secret } : {}),
+    ...(options.length > 0 ? { options } : {}),
+    ...(typeof entry.placeholder === "string" ? { placeholder: entry.placeholder } : {})
+  };
+}
+
+function to_skill_schema(value: unknown): ACPSkillSchema | undefined {
+  const schema = is_plain_object(value) ? value : {};
+  const fields = Array.isArray(schema.fields)
+    ? schema.fields.map((field) => to_skill_field(field)).filter((field): field is ACPSkillField => field !== null)
+    : [];
+  if (fields.length === 0) return undefined;
+  return {
+    ...(typeof schema.title === "string" ? { title: schema.title } : {}),
+    fields
+  };
+}
+
+function to_skill_action(value: unknown): ACPSkillAction | null {
+  const entry = is_plain_object(value) ? value : {};
+  const id = as_text(entry.id);
+  const label = as_text(entry.label);
+  const op_obj = is_plain_object(entry.op) ? entry.op : {};
+  const module_name = as_text(op_obj.module);
+  const op_name = as_text(op_obj.op);
+  if (!id || !label || !module_name || !op_name) return null;
+  const kind_raw = as_text(entry.kind).toLowerCase();
+  const kind = kind_raw === "primary" || kind_raw === "danger" || kind_raw === "secondary" ? kind_raw : undefined;
+  const params_schema = is_plain_object(entry.params_schema)
+    ? to_skill_schema(entry.params_schema)
+    : undefined;
+  const confirm_obj = is_plain_object(entry.confirm) ? entry.confirm : {};
+  const confirm_title = as_text(confirm_obj.title);
+  const confirm_body = as_text(confirm_obj.body);
+  return {
+    id,
+    label,
+    ...(kind ? { kind } : {}),
+    op: {
+      module: module_name,
+      op: op_name
+    },
+    ...(params_schema ? { params_schema: { fields: params_schema.fields } } : {}),
+    ...(confirm_title && confirm_body ? { confirm: { title: confirm_title, body: confirm_body } } : {})
+  };
+}
+
+function build_fallback_skill_actions(skill_id: string): ACPSkillAction[] {
+  if (skill_id === "@xpell/agent-skill-telegram") {
+    return [
+      {
+        id: "verify_token",
+        label: "Verify Token",
+        kind: "secondary",
+        op: { module: "telegram", op: "verify_token" }
+      },
+      {
+        id: "status",
+        label: "Status",
+        kind: "secondary",
+        op: { module: "telegram", op: "status" }
+      },
+      {
+        id: "start",
+        label: "Start",
+        kind: "primary",
+        op: { module: "telegram", op: "start" },
+        params_schema: {
+          fields: [
+            {
+              key: "mode",
+              label: "Mode",
+              type: "select",
+              options: [
+                { label: "Polling", value: "polling" },
+                { label: "Webhook", value: "webhook" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        id: "stop",
+        label: "Stop",
+        kind: "danger",
+        op: { module: "telegram", op: "stop" },
+        confirm: {
+          title: "Stop Telegram",
+          body: "Stop the Telegram connector?"
+        }
+      }
+    ];
+  }
+
+  if (skill_id === AZURE_SKILL_ID) {
+    return [
+      {
+        id: "status",
+        label: "Status",
+        kind: "secondary",
+        op: { module: "azure", op: "status" }
+      },
+      {
+        id: "test_connection",
+        label: "Test Connection",
+        kind: "primary",
+        op: { module: "azure", op: "test_connection" }
+      }
+    ];
+  }
+
+  return [];
+}
+
+function to_skill_config_result(skill_id: string, payload: unknown): ACPSkillConfig {
+  const result = is_plain_object(payload) ? payload : {};
+  const settings = is_plain_object(result.settings) ? deep_clone(result.settings) : {};
+  const masked = is_plain_object(result.masked)
+    ? Object.fromEntries(
+        Object.entries(result.masked).map(([key, value]) => [key, value === true])
+      )
+    : {};
+  const schema = to_skill_schema(result.schema);
+  return {
+    skill_id,
+    settings,
+    masked,
+    ...(schema ? { schema } : {}),
+    actions: build_fallback_skill_actions(skill_id)
+  };
+}
+
+function to_intent_record(payload: unknown): ACPIntentRecord | null {
+  const value = is_plain_object(payload) ? payload : {};
+  const intent_id = as_text(value.intent_id);
+  const title = as_text(value.title);
+  const skill_id = as_text(value.skill_id);
+  if (!intent_id || !title || !skill_id) return null;
+  const roles_allowed = normalize_string_array(value.roles_allowed).filter(
+    (entry): entry is ACPIntentRole => entry === "owner" || entry === "admin" || entry === "customer"
+  );
+  return {
+    intent_id,
+    title,
+    ...(as_text(value.description) ? { description: as_text(value.description) } : {}),
+    skill_id,
+    enabled: value.enabled === true,
+    priority: Number.isFinite(Number(value.priority)) ? Math.floor(Number(value.priority)) : 100,
+    roles_allowed,
+    channels_allowed: normalize_string_array(value.channels_allowed),
+    synonyms: normalize_string_array(value.synonyms),
+    examples: normalize_string_array(value.examples),
+    default_params_json: typeof value.default_params_json === "string" ? value.default_params_json : ""
   };
 }
 
@@ -522,14 +1092,15 @@ function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
     env: "default",
     agent_runtime_version: about.agent_version,
     xpell_version: about.xpell_version,
-    connected: false,
-    identity: {
-      name: "XBot",
-      role: "",
-      system_prompt: "",
-      language_policy: "auto"
-    }
-  };
+      connected: false,
+      identity: {
+        name: "XBot",
+        role: "Assistant",
+        system_prompt:
+          "You are {agent_name} ({agent_id}), a helpful {agent_role}. Reply in the user's language; Spanish if they write Spanish, English otherwise.",
+        language_policy: "auto"
+      }
+    };
 
   let admin_counter = admins.length + 1;
   let session_counter = 0;
@@ -561,6 +1132,61 @@ function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
   }
 
   return {
+    async exec(module_name: string, op: string, params: Record<string, unknown> = {}): Promise<unknown> {
+      if (module_name === "telegram" && op === "status") {
+        const runtime = skill_runtime["@xpell/agent-skill-telegram"] ?? { running: false, mode: "polling" };
+        return {
+          available: true,
+          running: runtime.running,
+          mode: runtime.mode
+        } satisfies ACPSkillRuntimeStatus;
+      }
+      if (module_name === "telegram" && op === "start") {
+        const mode = as_text(params.mode) || "polling";
+        if (mode === "polling") {
+          const runtime = skill_runtime["@xpell/agent-skill-telegram"] ?? { running: false, mode: "polling" };
+          runtime.running = true;
+          runtime.mode = "polling";
+          skill_runtime["@xpell/agent-skill-telegram"] = runtime;
+          return {
+            available: true,
+            running: true,
+            mode: "polling"
+          } satisfies ACPSkillRuntimeStatus;
+        }
+        return {
+          available: true,
+          running: true,
+          mode
+        } satisfies ACPSkillRuntimeStatus;
+      }
+      if (module_name === "telegram" && op === "stop") {
+        const runtime = skill_runtime["@xpell/agent-skill-telegram"] ?? { running: false, mode: "polling" };
+        runtime.running = false;
+        skill_runtime["@xpell/agent-skill-telegram"] = runtime;
+        return {
+          available: true,
+          running: false,
+          mode: runtime.mode
+        } satisfies ACPSkillRuntimeStatus;
+      }
+      if (module_name === "azure" && op === "status") {
+        return {
+          configured: true,
+          has_openai: true,
+          has_speech: true
+        };
+      }
+      if (module_name === "azure" && op === "test_connection") {
+        return {
+          openai: { ok: true },
+          speech: { ok: true },
+          _ts: Date.now()
+        } satisfies ACPAzureConnectionTestResult;
+      }
+      throw new Error(`Unsupported mock exec: ${module_name}.${op}`);
+    },
+
     auth: {
       async login(identifier: string, password: string): Promise<ACPLoginResponse> {
         const admin = find_admin_by_identifier(identifier);
@@ -631,7 +1257,22 @@ function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
 
     skills: {
       async list(): Promise<ACPSkill[]> {
-        return skills.map((skill) => deep_clone(skill));
+        return skills.map((skill) => ({
+          ...deep_clone(skill),
+          actions: build_fallback_skill_actions(skill.id)
+        }));
+      },
+
+      async getConfig(skill_id: string): Promise<ACPSkillConfig> {
+        find_skill(skill_id);
+        const stored = deep_clone(skill_settings[skill_id] ?? {});
+        const masked_settings = mask_sensitive(stored, skill_sensitive_paths[skill_id] ?? []);
+        return {
+          skill_id,
+          settings: masked_settings,
+          masked: Object.fromEntries((skill_sensitive_paths[skill_id] ?? []).map((path_value) => [path_value, true])),
+          actions: build_fallback_skill_actions(skill_id)
+        };
       },
 
       async enable(skill_id: string): Promise<ACPSkill> {
@@ -789,6 +1430,18 @@ function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
       }
     },
 
+    intents: {
+      async list(): Promise<ACPIntentRecord[]> {
+        return [];
+      },
+      async setEnabled(): Promise<void> {
+        return;
+      },
+      async updateConfig(): Promise<void> {
+        return;
+      }
+    },
+
     system: {
       async getAbout(): Promise<ACPAbout> {
         return deep_clone(about);
@@ -800,6 +1453,17 @@ function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
         server_url = normalize_server_url(next_url);
         persist_server_url(server_url);
         return server_url;
+      },
+      async resetDb(): Promise<ACPResetDbResult> {
+        const users_deleted = admins.length;
+        admins.splice(0, admins.length);
+        return {
+          ok: true,
+          threads_deleted: 0,
+          messages_deleted: 0,
+          users_deleted,
+          sessions_deleted: 0
+        };
       }
     },
 
@@ -830,6 +1494,68 @@ function create_mock_agent_api(opts: CreateAgentApiOptions): AgentApi {
         };
         return deep_clone(agent_profile);
       }
+    },
+
+    async conversations_list(): Promise<ACPConversationSummary[]> {
+      return [];
+    },
+
+    async conversations_get_thread(): Promise<ACPConversationSummary | null> {
+      return null;
+    },
+
+    async conversations_list_messages(): Promise<ACPConversationMessage[]> {
+      return [];
+    },
+
+    async qagent_run_quick(): Promise<ACPQAgentLastRun> {
+      return {
+        run: null,
+        top_failures: []
+      };
+    },
+
+    async qagent_get_last_run(): Promise<ACPQAgentLastRun> {
+      return {
+        run: null,
+        top_failures: []
+      };
+    },
+
+    async qagent_list_runs(): Promise<ACPQAgentRun[]> {
+      return [];
+    },
+
+    async qagent_get_run(): Promise<{ run: ACPQAgentRun | null; cases: ACPQAgentCase[] }> {
+      return {
+        run: null,
+        cases: []
+      };
+    },
+
+    async users_list(input: ACPUsersListInput = {}): Promise<ACPUsersListResult> {
+      const q = as_text(input.q).toLowerCase();
+      const items = admins
+        .map((admin) => ({
+          user_id: admin.id,
+          display_name: admin.name,
+          role: admin.role,
+          channels: [],
+          created_at: 0,
+          updated_at: 0
+        }) satisfies ACPUserSummary)
+        .filter((user) => {
+          if (!q) return true;
+          return (
+            user.user_id.toLowerCase().includes(q) ||
+            user.display_name.toLowerCase().includes(q) ||
+            user.role.toLowerCase().includes(q)
+          );
+        });
+
+      return {
+        items: deep_clone(items)
+      };
     }
   };
 }
@@ -909,17 +1635,40 @@ function create_wormholes_api(opts: CreateAgentApiOptions): AgentApi {
     const status_raw = as_text(loaded_obj.status);
     const status: ACPSkillStatus =
       status_raw === "loaded" || status_raw === "error" || status_raw === "disabled" ? status_raw : "disabled";
+    const actions = Array.isArray(loaded_obj.actions)
+      ? loaded_obj.actions.map((action) => to_skill_action(action)).filter((action): action is ACPSkillAction => action !== null)
+      : build_fallback_skill_actions(skill_id);
+    const settings_meta = is_plain_object(loaded_obj.settings_meta)
+      ? {
+          ...(to_skill_schema(loaded_obj.settings_meta.schema) ? { schema: to_skill_schema(loaded_obj.settings_meta.schema) } : {}),
+          ...(Array.isArray(loaded_obj.settings_meta.sensitive)
+            ? {
+                sensitive: loaded_obj.settings_meta.sensitive
+                  .map((entry) => as_text(entry))
+                  .filter((entry) => entry.length > 0)
+              }
+            : {})
+        }
+      : undefined;
 
     return {
       id: skill_id,
       version: as_text(loaded_obj.version) || "unknown",
       enabled: loaded_obj.enabled === true,
       status,
+      ...(as_text(loaded_obj.name) ? { name: as_text(loaded_obj.name) } : {}),
+      ...(as_text(loaded_obj.description) ? { description: as_text(loaded_obj.description) } : {}),
+      ...(settings_meta ? { settings_meta } : {}),
+      ...(actions.length > 0 ? { actions } : {}),
       ...(as_text(loaded_obj.error) ? { error: as_text(loaded_obj.error) } : {})
     };
   };
 
   return {
+    async exec(module_name: string, op: string, params: Record<string, unknown> = {}): Promise<unknown> {
+      return call_xcmd(module_name, op, params, resolve_sid());
+    },
+
     auth: {
       async login(identifier: string, password: string): Promise<ACPLoginResponse> {
         const out = await call_xcmd<{ token: unknown; user: unknown }>(
@@ -1074,6 +1823,21 @@ function create_wormholes_api(opts: CreateAgentApiOptions): AgentApi {
             return read_skill_record(skill_id, entry);
           })
           .filter((entry): entry is ACPSkill => entry !== null);
+      },
+
+      async getConfig(skill_id: string): Promise<ACPSkillConfig> {
+        const out = await call_xcmd<{ result?: unknown }>(
+          "settings",
+          "get_skill",
+          {
+            skill_id,
+            include_schema: true,
+            include_masked: true
+          },
+          resolve_sid()
+        );
+
+        return to_skill_config_result(skill_id, out.result);
       },
 
       async enable(skill_id: string): Promise<ACPSkill> {
@@ -1334,6 +2098,35 @@ function create_wormholes_api(opts: CreateAgentApiOptions): AgentApi {
       }
     },
 
+    intents: {
+      async list(): Promise<ACPIntentRecord[]> {
+        const out = await call_xcmd<{ items?: unknown }>("intent", "list_all", {}, resolve_sid());
+        const items = Array.isArray(out.items) ? out.items : [];
+        return items.map((entry) => to_intent_record(entry)).filter((entry): entry is ACPIntentRecord => entry !== null);
+      },
+
+      async setEnabled(intent_id: string, enabled: boolean): Promise<void> {
+        await call_xcmd("intent", "set_enabled", { intent_id, enabled }, resolve_sid());
+      },
+
+      async updateConfig(input: ACPIntentUpdateInput): Promise<void> {
+        await call_xcmd(
+          "intent",
+          "update_config",
+          {
+            intent_id: input.intent_id,
+            ...(typeof input.priority === "number" ? { priority: input.priority } : {}),
+            ...(input.roles_allowed ? { roles_allowed: input.roles_allowed } : {}),
+            ...(input.channels_allowed ? { channels_allowed: input.channels_allowed } : {}),
+            ...(input.synonyms ? { synonyms: input.synonyms } : {}),
+            ...(input.examples ? { examples: input.examples } : {}),
+            ...(typeof input.default_params_json === "string" ? { default_params_json: input.default_params_json } : {})
+          },
+          resolve_sid()
+        );
+      }
+    },
+
     system: {
       async getAbout(): Promise<ACPAbout> {
         const hello_url = `${server_url}/wh/v2/hello`;
@@ -1380,6 +2173,30 @@ function create_wormholes_api(opts: CreateAgentApiOptions): AgentApi {
         server_url = normalize_server_url(next_url);
         persist_server_url(server_url);
         return server_url;
+      },
+
+      async resetDb(): Promise<ACPResetDbResult> {
+        const out = await call_xcmd<{
+          ok?: unknown;
+          threads_deleted?: unknown;
+          messages_deleted?: unknown;
+          users_deleted?: unknown;
+          sessions_deleted?: unknown;
+        }>("agent", "reset_db", {}, resolve_sid());
+
+        const read_count = (value: unknown): number => {
+          const parsed = Number.parseInt(String(value ?? ""), 10);
+          if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+          return parsed;
+        };
+
+        return {
+          ok: out.ok !== false,
+          threads_deleted: read_count(out.threads_deleted),
+          messages_deleted: read_count(out.messages_deleted),
+          users_deleted: read_count(out.users_deleted),
+          sessions_deleted: read_count(out.sessions_deleted)
+        };
       }
     },
 
@@ -1395,25 +2212,120 @@ function create_wormholes_api(opts: CreateAgentApiOptions): AgentApi {
           "agent",
           "set_profile",
           {
-            profile: {
-              ...(Object.prototype.hasOwnProperty.call(patch_obj, "name")
-                ? { name: as_text(patch_obj.name) }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(patch_obj, "role")
-                ? { role: as_text(patch_obj.role) }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(patch_obj, "system_prompt")
-                ? { system_prompt: typeof patch_obj.system_prompt === "string" ? patch_obj.system_prompt.trim() : "" }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(patch_obj, "language_policy")
-                ? { language_policy: normalize_language_policy(patch_obj.language_policy) }
-                : {})
-            }
+            ...(Object.prototype.hasOwnProperty.call(patch_obj, "name")
+              ? { name: as_text(patch_obj.name) }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(patch_obj, "role")
+              ? { role: as_text(patch_obj.role) }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(patch_obj, "system_prompt")
+              ? { system_prompt: typeof patch_obj.system_prompt === "string" ? patch_obj.system_prompt.trim() : "" }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(patch_obj, "language_policy")
+              ? { language_policy: normalize_language_policy(patch_obj.language_policy) }
+              : {})
           },
           resolve_sid()
         );
         return to_agent_profile(out);
       }
+    },
+
+    async conversations_list(limit = 100): Promise<ACPConversationSummary[]> {
+      const safe_limit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 100;
+      const out = await call_xcmd<{ threads?: unknown }>("conv", "list_threads", { limit: safe_limit }, resolve_sid());
+      return Array.isArray(out.threads)
+        ? out.threads.map((entry) => to_conversation_summary(entry)).filter((entry): entry is ACPConversationSummary => entry !== null)
+        : [];
+    },
+
+    async conversations_get_thread(thread_id: string): Promise<ACPConversationSummary | null> {
+      const safe_thread_id = as_text(thread_id);
+      if (!safe_thread_id) return null;
+      const out = await call_xcmd<{ thread?: unknown }>("conv", "get_thread", { thread_id: safe_thread_id }, resolve_sid());
+      return to_conversation_summary(out.thread);
+    },
+
+    async conversations_list_messages(input: {
+      thread_id: string;
+      limit?: number;
+      before_ts?: number;
+    }): Promise<ACPConversationMessage[]> {
+      const safe_thread_id = as_text(input.thread_id);
+      if (!safe_thread_id) return [];
+      const params: Record<string, unknown> = { thread_id: safe_thread_id };
+      if (typeof input.limit === "number" && Number.isFinite(input.limit) && input.limit > 0) {
+        params.limit = Math.floor(input.limit);
+      }
+      if (typeof input.before_ts === "number" && Number.isFinite(input.before_ts) && input.before_ts > 0) {
+        params.before_ts = Math.floor(input.before_ts);
+      }
+      const out = await call_xcmd<{ messages?: unknown }>("conv", "list_messages", params, resolve_sid());
+      return Array.isArray(out.messages)
+        ? out.messages
+            .map((entry) => to_conversation_message(entry))
+            .filter((entry): entry is ACPConversationMessage => entry !== null)
+        : [];
+    },
+
+    async qagent_run_quick(max_cases = 8): Promise<ACPQAgentLastRun> {
+      const safe_max_cases = Number.isFinite(max_cases) && max_cases > 0 ? Math.floor(max_cases) : 8;
+      const out = await call_xcmd<Record<string, unknown>>(
+        "qagent",
+        "run_quick",
+        { _max_cases: safe_max_cases },
+        resolve_sid()
+      );
+      return to_qagent_last_run(out);
+    },
+
+    async qagent_get_last_run(): Promise<ACPQAgentLastRun> {
+      const out = await call_xcmd<Record<string, unknown>>("qagent", "get_last_run", {}, resolve_sid());
+      return to_qagent_last_run(out);
+    },
+
+    async qagent_list_runs(limit = 10): Promise<ACPQAgentRun[]> {
+      const safe_limit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
+      const out = await call_xcmd<{ items?: unknown }>("qagent", "list_runs", { _limit: safe_limit }, resolve_sid());
+      return Array.isArray(out.items)
+        ? out.items.map((entry) => to_qagent_run(entry)).filter((entry): entry is ACPQAgentRun => entry !== null)
+        : [];
+    },
+
+    async qagent_get_run(run_id: string): Promise<{ run: ACPQAgentRun | null; cases: ACPQAgentCase[] }> {
+      const safe_run_id = as_text(run_id);
+      if (!safe_run_id) {
+        return {
+          run: null,
+          cases: []
+        };
+      }
+      const out = await call_xcmd<Record<string, unknown>>("qagent", "get_run", { run_id: safe_run_id }, resolve_sid());
+      const cases_source = Array.isArray(out.cases) ? out.cases : [];
+      return {
+        run: to_qagent_run(out.run, out.totals),
+        cases: cases_source.map((entry) => to_qagent_case(entry)).filter((entry): entry is ACPQAgentCase => entry !== null)
+      };
+    },
+
+    async users_list(input: ACPUsersListInput = {}): Promise<ACPUsersListResult> {
+      const params: Record<string, unknown> = {};
+      if (as_text(input.q)) params._q = as_text(input.q);
+      if (typeof input.limit === "number" && Number.isFinite(input.limit) && input.limit > 0) {
+        params._limit = Math.floor(input.limit);
+      }
+      if (as_text(input.cursor)) params._cursor = as_text(input.cursor);
+
+      const out = await call_xcmd<{ items?: unknown; next_cursor?: unknown }>("users", "list", params, resolve_sid());
+      const items = Array.isArray(out.items)
+        ? out.items.map((entry) => to_user_summary(entry)).filter((entry): entry is ACPUserSummary => entry !== null)
+        : [];
+      const next_cursor = as_text(out.next_cursor);
+
+      return {
+        items,
+        ...(next_cursor ? { next_cursor } : {})
+      };
     }
   };
 }

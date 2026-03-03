@@ -142,9 +142,12 @@ async function ensure_conv_xdb(scope: AgentConvXdbScope): Promise<ConvXdb> {
         _channel_thread_id: { _type: "String", _required: true, _index: true },
         _user_id: { _type: "String", _required: true, _index: true },
         _status: { _type: "String", _required: true },
-        _created_at: { _type: "Number", _required: true, _index: true },
-        _updated_at: { _type: "Number", _required: true, _index: true },
-        _tags: { _type: "Array" }
+        _tags: { _type: "Array" },
+        _pending_action_type: { _type: "String" },
+        _pending_action_id: { _type: "String" },
+        _pending_action_payload_json: { _type: "String" },
+        _pending_action_created_at: { _type: "Number" },
+        _pending_action_expires_at: { _type: "Number" }
       }
     }) as XDBEntity;
 
@@ -199,7 +202,18 @@ function normalize_thread(value: unknown): ConversationThread | undefined {
     status,
     created_at: to_ts(value._created_at),
     updated_at: to_ts(value._updated_at),
-    tags
+    tags,
+    ...(to_text(value._pending_action_type) ? { pending_action_type: to_text(value._pending_action_type) } : {}),
+    ...(to_text(value._pending_action_id) ? { pending_action_id: to_text(value._pending_action_id) } : {}),
+    ...(to_text(value._pending_action_payload_json)
+      ? { pending_action_payload_json: to_text(value._pending_action_payload_json) }
+      : {}),
+    ...(typeof value._pending_action_created_at === "number" && Number.isFinite(value._pending_action_created_at)
+      ? { pending_action_created_at: to_ts(value._pending_action_created_at) }
+      : {}),
+    ...(typeof value._pending_action_expires_at === "number" && Number.isFinite(value._pending_action_expires_at)
+      ? { pending_action_expires_at: to_ts(value._pending_action_expires_at) }
+      : {})
   };
 }
 
@@ -259,9 +273,12 @@ export async function upsert_thread_xdb(scope: AgentConvXdbScope, thread: Conver
     _channel_thread_id: thread.channel_thread_id,
     _user_id: thread.user_id,
     _status: thread.status,
-    _created_at: thread.created_at,
-    _updated_at: thread.updated_at,
-    _tags: [...thread.tags]
+    _tags: [...thread.tags],
+    _pending_action_type: thread.pending_action_type ?? "",
+    _pending_action_id: thread.pending_action_id ?? "",
+    _pending_action_payload_json: thread.pending_action_payload_json ?? "",
+    _pending_action_created_at: thread.pending_action_created_at ?? 0,
+    _pending_action_expires_at: thread.pending_action_expires_at ?? 0
   };
 
   if (existing.length > 0) {
@@ -270,6 +287,11 @@ export async function upsert_thread_xdb(scope: AgentConvXdbScope, thread: Conver
   }
 
   await xdb._threads.add(row, true, true);
+}
+
+export async function delete_thread_xdb(scope: AgentConvXdbScope, thread_id: string): Promise<void> {
+  const xdb = await ensure_conv_xdb(scope);
+  await xdb._threads.delete({ _app_id: scope._app_id, _env: scope._env, _thread_id: thread_id }, true);
 }
 
 export async function list_messages_xdb(scope: AgentConvXdbScope): Promise<ConversationMessage[]> {
@@ -310,4 +332,9 @@ export async function upsert_message_xdb(scope: AgentConvXdbScope, message: Conv
   }
 
   await xdb._messages.add(row, true, true);
+}
+
+export async function delete_message_xdb(scope: AgentConvXdbScope, message_id: string): Promise<void> {
+  const xdb = await ensure_conv_xdb(scope);
+  await xdb._messages.delete({ _app_id: scope._app_id, _env: scope._env, _message_id: message_id }, true);
 }

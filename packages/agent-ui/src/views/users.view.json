@@ -1,0 +1,128 @@
+{
+  "_id": "view-users",
+  "_type": "view",
+  "class": "acp-page",
+  "_children": [
+    {
+      "_type": "label",
+      "class": "acp-title",
+      "_text": "Users"
+    },
+    {
+      "_type": "input",
+      "_id": "users-search-input",
+      "class": "acp-input",
+      "placeholder": "Search by id, name, role, or channel"
+    },
+    {
+      "_type": "view",
+      "class": "acp-inline-actions",
+      "_children": [
+        {
+          "_type": "button",
+          "_id": "users-search-btn",
+          "class": "acp-secondary-btn",
+          "_text": "Search",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "users_search"
+            }
+          }
+        },
+        {
+          "_type": "button",
+          "_id": "users-refresh-btn",
+          "class": "acp-primary-btn",
+          "_text": "Refresh",
+          "_on_click": {
+            "_op": "acp-ui-action",
+            "_params": {
+              "_action": "users_refresh"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "_type": "label",
+      "class": "acp-info-line",
+      "_data_source": "acp.ui.users.status_text",
+      "_on_data": {
+        "_op": "set-text-from-data"
+      }
+    },
+    {
+      "_type": "view",
+      "class": "acp-table-scroll",
+      "_children": [
+        {
+          "_type": "table",
+          "_id": "users-table",
+          "_data_source": "acp.ui.users.table_rows",
+          "_columns": [
+            {
+              "key": "display",
+              "label": "Display",
+              "width": "220px"
+            },
+            {
+              "key": "role",
+              "label": "Role",
+              "width": "100px"
+            },
+            {
+              "key": "channels_text",
+              "label": "Channels",
+              "width": "180px"
+            },
+            {
+              "key": "updated_text",
+              "label": "Updated",
+              "width": "180px"
+            },
+            {
+              "key": "action",
+              "label": "Actions",
+              "width": "140px"
+            }
+          ],
+          "_dense": true,
+          "_striped": true,
+          "_bordered": true,
+          "_hover": false,
+          "_empty_text": "No users"
+        }
+      ]
+    },
+    {
+      "_type": "input",
+      "_id": "users-action-user-id-input",
+      "style": "display:none"
+    },
+    {
+      "_type": "button",
+      "_id": "users-promote-btn",
+      "style": "display:none",
+      "_text": "Make Admin",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "users_promote_admin"
+        }
+      }
+    },
+    {
+      "_type": "button",
+      "_id": "users-demote-btn",
+      "style": "display:none",
+      "_text": "Make Customer",
+      "_on_click": {
+        "_op": "acp-ui-action",
+        "_params": {
+          "_action": "users_demote_customer"
+        }
+      }
+    }
+  ]
+}

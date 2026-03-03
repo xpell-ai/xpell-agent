@@ -9,12 +9,52 @@
       "_text": "Skills"
     },
     {
-      "_type": "label",
-      "class": "acp-panel",
-      "_data_source": "acp.ui.skills.list_text",
-      "_on_data": {
-        "_op": "set-text-from-data"
-      }
+      "_type": "view",
+      "class": "acp-table-scroll",
+      "_children": [
+        {
+          "_type": "table",
+          "_id": "skills-table",
+          "_data_source": "acp.ui.skills.table_rows",
+          "_columns": [
+            {
+              "key": "id",
+              "label": "Skill ID",
+              "width": "240px"
+            },
+            {
+              "key": "version",
+              "label": "Version",
+              "width": "100px"
+            },
+            {
+              "key": "enabled",
+              "label": "Enabled",
+              "width": "100px"
+            },
+            {
+              "key": "status",
+              "label": "Status",
+              "width": "120px"
+            },
+            {
+              "key": "error",
+              "label": "Error",
+              "width": "260px"
+            },
+            {
+              "key": "action",
+              "label": "Action",
+              "width": "120px"
+            }
+          ],
+          "_dense": true,
+          "_striped": true,
+          "_bordered": true,
+          "_hover": false,
+          "_empty_text": "No skills"
+        }
+      ]
     },
     {
       "_type": "input",
